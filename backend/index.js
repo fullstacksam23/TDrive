@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import db from "./database/db.js";
-import {sendFile} from "./bot.js";
+import {sendFile, getChunkBuffer} from "./bot.js";
 import crypto from "crypto";
 import fs from "fs";
 import cors from "cors";
@@ -15,7 +15,7 @@ const upload = multer({ dest: 'uploads/' });
 app.post("/upload", upload.single("file"), async (req, res) => {
     console.log(req.file);
 
-    const CHUNK_SIZE = 45 * 1024 * 1024;
+    const CHUNK_SIZE = 17 * 1024 * 1024;
     const filePath = req.file.path;
     const mimeType = req.file.mimetype;
     const totalSize = req.file.size;
@@ -83,6 +83,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     }
 
 });
+
 app.get("/files", async (req, res) => {
     try {
         const rows = db.prepare("SELECT * FROM files").all();
@@ -94,4 +95,39 @@ app.get("/files", async (req, res) => {
     }
 });
 
+app.get("/download/:fileId", async (req, res) => {
+    try {
+        const {fileId} = req.params;
+        const stmt = db.prepare("SELECT telegram_file_id from file_chunks WHERE file_id = ?  ORDER BY chunk_index ASC");
+        const telegramFileIds = stmt.all(fileId);
+        if (telegramFileIds.length === 0) return res.status(404).send("No telegram file found.");
+        console.log(telegramFileIds);
+
+        const stmt2 = db.prepare("SELECT file_name, mimetype from files WHERE id = ?");
+        const fileInfo = stmt2.get(fileId);
+        if (!fileInfo) return res.status(404).send("File not found");
+
+        //set headers to tell browser to download the file and not display it
+        const safeName = encodeURIComponent(fileInfo.file_name);
+        res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+        res.setHeader('Content-Type', fileInfo.mimetype || 'application/octet-stream');
+
+        for (const item of telegramFileIds) {
+            console.log(`Streaming chunk: ${item.telegram_file_id}`);
+
+            // Get the buffer for this chunk
+            const chunkBuffer = await getChunkBuffer(item.telegram_file_id);
+
+            // Send it directly to the user's browser
+            res.write(chunkBuffer);
+        }
+
+        // 4. End the stream
+        res.end();
+    }catch(error){
+        console.error("Download Stream Error:", error);
+        if (!res.headersSent) res.status(500).send("Error downloading file");
+        else res.end();
+    }
+})
 app.listen(8080, () => console.log("Server started on port 8080"));

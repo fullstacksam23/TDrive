@@ -1,6 +1,6 @@
 import { Bot, InputFile } from "grammy";
-import fs from 'fs';
-import fetch from 'node-fetch';
+
+import axios from "axios";
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -18,26 +18,19 @@ async function sendFile(chunk, fileName){
         console.log("Failed uploading to telegram: "+error);
     }
 }
-async function download(url, path) {
-    const response = await fetch(url);
-    const fileStream = fs.createWriteStream(path);
 
-    return new Promise((resolve, reject) => {
-        response.body.pipe(fileStream);
-        response.body.on("error", reject);
-        fileStream.on("finish", resolve);
+
+async function getChunkBuffer(telegramFileId) {
+    const file = await bot.api.getFile(telegramFileId);
+    const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
+
+    const response = await axios({
+        method: 'get',
+        url: url,
+        responseType: 'arraybuffer'
     });
-}
-async function getFile(telegramFileId){
-    try{
-        const file = await bot.api.getFile(telegramFileId);
-        const url_file_path = file.file_path;
-        const url = `https://api.telegram.org/file/bot${bot_token}/${url_file_path}`;
-        await download(url, "./file.png");
-        console.log("Download Complete");
-    }catch(error){
-        console.log("Failed: "+error);
-    }
+
+    return Buffer.from(response.data);
 }
 
-export {sendFile, getFile};
+export {sendFile, getChunkBuffer};

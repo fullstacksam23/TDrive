@@ -1,7 +1,18 @@
+import {useEffect, useState} from "react";
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 
-export function Header() {
+export function Header({setSearchQuery}) {
+    const [value, setValue] = useState("");
+    //debounce logic
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            setSearchQuery(value.trim());
+        }, 300);
+
+        return () => clearTimeout(timeout);  //cleanup function run everytime the value changes before the effect is run again
+    }, [value]);
+
     return (
         <header className="
       w-full h-16 flex items-center px-6 gap-4 sticky top-0 z-10
@@ -25,6 +36,8 @@ export function Header() {
             dark:placeholder:text-neutral-500
           "
                     placeholder="Search in TDrive..."
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
                 />
             </div>
         </header>

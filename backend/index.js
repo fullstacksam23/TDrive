@@ -195,4 +195,32 @@ app.get("/download/:fileId", async (req, res) => {
         else res.end();
     }
 })
+
+app.get("/search/:query", (req, res) => {
+    const { query } = req.params;
+
+    if (!query || !query.trim()) {
+        return res.json([]);
+    }
+
+    const ftsQuery = `"${query.trim()}"*`;
+
+    try {
+        const stmt = db.prepare(`
+            SELECT f.*
+            FROM files f
+                     JOIN files_search ON f.id = files_search.file_id
+            WHERE files_search MATCH ?
+            ORDER BY bm25(files_search)
+        `);
+
+        const results = stmt.all(ftsQuery);
+        res.json(results);
+    } catch (err) {
+        console.error("Search error:", err);
+        res.status(500).json({ error: "Search failed" });
+    }
+});
+
+
 app.listen(8080, () => console.log("Server started on port 8080"));

@@ -1,12 +1,24 @@
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { FileGrid } from "@/components/file-grid";
-import { useState } from "react";
+import {useEffect, useState} from "react";
 import Upload from "@/components/upload";
 
 function App() {
     const [refreshKey, setRefreshKey] = useState(0);
+    const [searchQuery, setSearchQuery] = useState("");
     const [upload, setUpload] = useState(null);
+    const [files, setFiles] = useState([]);
+
+    useEffect(() => {
+        async function loadFiles() {
+            const url = searchQuery ? `http://localhost:8080/search/${encodeURIComponent(searchQuery)}` : "http://localhost:8080/files";
+            const files = await fetch(url);
+            const data = await files.json();
+            setFiles(data);
+        }
+        loadFiles();
+    }, [refreshKey, searchQuery]);
 
     function refreshFiles() {
         setRefreshKey(prev => prev + 1);
@@ -29,8 +41,8 @@ function App() {
 
 
             <div className="flex-1 flex flex-col">
-                <Header />
-                <FileGrid refreshKey={refreshKey}/>
+                <Header setSearchQuery={setSearchQuery} />
+                <FileGrid files={files} />
                 <div className="fixed bottom-6 right-6 z-50">
                     {upload && (
                         <Upload

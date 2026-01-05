@@ -11,32 +11,55 @@ import {
     Plus
 } from "lucide-react"
 
-export function Sidebar({onUploadSuccess}) {
+export function Sidebar({
+                            onUploadStart,
+                            onUploadProgress,
+                            onUploadSuccess,
+                            onUploadComplete
+                        }) {
     const fileInputRef = useRef(null)
 
     // handle file selection
     const handleFileChange = async (e) => {
-        const file = e.target.files[0]
-        if (file) {
-            const formData = new FormData();
-            formData.append("file", file);
-            try {
-                // 4. Send it via fetch
-                const response = await fetch("http://localhost:8080/upload", {
-                    method: "POST",
-                    body: formData,
-                });
+        const file = e.target.files[0];
+        if (!file) return;
 
-                if (response.ok) {
-                    const data = await response.json();
-                    onUploadSuccess?.(); // <-- notify App to refresh grid
-                    console.log("Success:", data);
-                }
-            } catch (error) {
-                console.error("Error uploading:", error);
+        onUploadStart?.(file.name);
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("http://localhost:8080/upload", {
+            method: "POST",
+            body: formData
+        });
+
+        const { uploadId } = await res.json();
+
+        // 2️⃣ Listen for progress via SSE
+        const es = new EventSource(
+            `http://localhost:8080/upload/status/${uploadId}`
+        );
+
+        es.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            onUploadProgress?.(data.progress);
+
+            if (data.done) {
+                es.close();
+                onUploadSuccess?.();
+                onUploadComplete?.();
             }
-        }
-    }
+        };
+
+        es.onerror = () => {
+            console.error("SSE connection error");
+            es.close();
+            onUploadComplete?.();
+        };
+    };
+
 
     // open file dialog when button clicked
     const handleNewClick = () => {

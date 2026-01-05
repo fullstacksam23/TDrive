@@ -6,45 +6,70 @@ import crypto from "crypto";
 import fs from "fs";
 import cors from "cors";
 
+
 const app = express();
 app.use(cors({
     origin: "http://localhost:5173"
 }));
 const upload = multer({ dest: 'uploads/' });
+const uploadProgress = new Map();
+
+
+
 
 app.post("/upload", upload.single("file"), async (req, res) => {
     console.log(req.file);
 
-    const CHUNK_SIZE = 17 * 1024 * 1024;
+    const uploadId = crypto.randomUUID();
+
+    const CHUNK_SIZE = 17 * 1024 * 1024; // inc to 18 or 19 mb in future
     const filePath = req.file.path;
     const mimeType = req.file.mimetype;
     const totalSize = req.file.size;
     const originalName = req.file.originalname;
     const stream = fs.createReadStream(filePath, {highWaterMark: CHUNK_SIZE});
+    const totalParts = Math.ceil(totalSize / CHUNK_SIZE);
+
+    uploadProgress.set(uploadId, {
+        current: 0,
+        total: totalParts,
+        fileName: originalName
+    });
+
+    res.json({ uploadId });
 
     let partNumber = 0;
     let chunkData = [];
+
     try {
         for await (const chunk of stream) {
             partNumber++;
 
-            // Generate safe unique filename for telegram
-            const uniqueSuffix = crypto.randomBytes(4).toString("hex");
-            const chunkName = `${originalName}.part${partNumber}-${uniqueSuffix}`;
+            const telegramFileId = await sendFile(
+                chunk,
+                `${originalName}.part${partNumber}`
+            );
 
-            // upload chunk to telegram
-            const telegramFileId = await sendFile(chunk, chunkName);
+            chunkData.push({ partNumber, telegramFileId });
 
-            if (!telegramFileId) {
-                throw new Error(`Chunk ${partNumber} failed to upload`);
-            }
-            console.log(`Processed part ${partNumber}, size: ${chunk.length} bytes, telegramFileId: ${telegramFileId}`);
-            chunkData.push({partNumber, telegramFileId, chunkName});
+            // 🔥 UPDATE PROGRESS HERE
+            uploadProgress.set(uploadId, {
+                current: partNumber,
+                total: totalParts,
+                fileName: originalName
+            });
         }
 
-        console.log("File uploaded");
-    }catch(error){
-        console.log("Error chunking file: "+error);
+        uploadProgress.set(uploadId, {
+            ...uploadProgress.get(uploadId),
+            done: true
+        });
+
+    } catch (err) {
+        uploadProgress.set(uploadId, {
+            ...uploadProgress.get(uploadId),
+            error: true
+        });
     }
 
     try{
@@ -72,11 +97,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         fs.unlinkSync(filePath);
         console.log(`Deleted temp files`);
 
-        return res.json({
-            message: "Upload complete",
-            file_id: fileId,
-            parts: partNumber
-        });
 
     }catch(error){
         console.log("Error writing to db: "+error);
@@ -84,10 +104,41 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
 });
 
+app.get("/upload/status/:uploadId", (req, res) => {
+    const { uploadId } = req.params;
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const interval = setInterval(() => {
+        const data = uploadProgress.get(uploadId);
+        if (!data) return;
+
+        const percent = Math.round(
+            (data.current / data.total) * 100
+        );
+
+        res.write(`data: ${JSON.stringify({
+            fileName: data.fileName,
+            progress: percent,
+            done: data.done || false
+        })}\n\n`);
+
+        if (data.done || data.error) {
+            clearInterval(interval);
+            uploadProgress.delete(uploadId);
+            res.end();
+        }
+    }, 500);
+});
+
+
+
+
 app.get("/files", async (req, res) => {
     try {
         const rows = db.prepare("SELECT * FROM files").all();
-        console.log(rows);
         return res.json(rows);
     }catch(error){
         console.log("Error fetching files from db: "+error);

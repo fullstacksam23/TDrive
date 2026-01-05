@@ -1,4 +1,4 @@
-import { useRef } from "react"
+import {useEffect, useRef, useState} from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
@@ -18,7 +18,7 @@ export function Sidebar({
                             onUploadComplete
                         }) {
     const fileInputRef = useRef(null)
-
+    const [totalGB, setTotalGB] = useState(null);
     // handle file selection
     const handleFileChange = async (e) => {
         const file = e.target.files[0];
@@ -65,6 +65,15 @@ export function Sidebar({
     const handleNewClick = () => {
         fileInputRef.current?.click()
     }
+    useEffect(() => {
+        async function getStats(){
+            const res = await fetch("http://localhost:8080/files/stats");
+            const data = await res.json();
+            console.log(data);
+            setTotalGB(data);
+        }
+        getStats();
+    }, [])
 
     return (
         <aside className="
@@ -114,18 +123,12 @@ export function Sidebar({
                 <Separator className="my-4 dark:border-neutral-800" />
 
                 <div className="px-3">
-                    <p className="text-sm text-muted-foreground mb-2">Storage</p>
+                    <p className="text-sm text-muted-foreground mb-2">Total Data Stored</p>
 
-                    <div className="w-full bg-muted rounded-full h-2 mb-2 dark:bg-neutral-800">
-                        <div
-                            className="bg-primary h-2 rounded-full"
-                            style={{ width: "35%" }}
-                        />
-                    </div>
-
-                    <p className="text-xs text-muted-foreground">
-                        4 GB of 15 GB used
+                    <p className="text-lg font-semibold text-foreground">
+                        {totalGB ? `${totalGB} GB` : "-"}
                     </p>
+
                 </div>
             </ScrollArea>
         </aside>

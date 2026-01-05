@@ -52,7 +52,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
             chunkData.push({ partNumber, telegramFileId });
 
-            // 🔥 UPDATE PROGRESS HERE
+            // Update progress into global map
             uploadProgress.set(uploadId, {
                 current: partNumber,
                 total: totalParts,
@@ -145,6 +145,20 @@ app.get("/files", async (req, res) => {
         return res.status(500).json({error: "failed to fetch files"});
     }
 });
+
+app.get("/files/stats", async (req, res) => {
+    const bytesToGB = (bytes) =>
+        bytes ? (bytes / (1024 ** 3)).toFixed(2) : "0.00";
+
+    try{
+        const rows = db.prepare("SELECT SUM(total_size) AS totalBytes FROM files").get();
+        const totalGB = bytesToGB(rows.totalBytes);
+        return res.json(totalGB);
+    }catch(error){
+        console.log("Error fetching files stats from db: "+error);
+        return res.status(500).json({error: "failed to fetch files"});
+    }
+})
 
 app.get("/download/:fileId", async (req, res) => {
     try {

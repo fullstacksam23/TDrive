@@ -19,7 +19,7 @@ function getIconForMimeType(mime) {
 
     if (mime.startsWith("video/")) return {icon: FileVideo, color: "dark:text-red-400"};
     if (mime.startsWith("audio/")) return {icon: FileAudio, color: "dark:text-blue-400"};
-    if (mime.startsWith("image/")) return {icon: FileImage, color: "dark:text-pink-400"};
+    if (mime.startsWith("image/")) return {icon: FileImage, color: "dark:text-purple-400"};
     if (mime === "application/zip" || mime.includes("compressed")) return {icon: FileArchive, color: "dark:text-amber-400"};
     if (mime === "application/pdf") return {icon: FileText, color: "dark:text-neutral-300"};
     if (mime.includes("presentation")) return {icon: Presentation, color: "dark:text-orange-400"};

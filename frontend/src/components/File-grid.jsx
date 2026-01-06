@@ -42,7 +42,7 @@ export function FileGrid({files}) {
                 const iconData = getIconForMimeType(item.mimetype);
 
                 return (
-                    <a href={`${apiUrl}/download/${item.id}`} key={item.id} download={item.file_name}>
+                    <a href={`${apiUrl}/download/${item.id}?api_key=${apiKey}`} key={item.id} download={item.file_name}>
                     <div
                         className="
               border rounded-lg p-4 cursor-pointer flex flex-col transition

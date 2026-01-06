@@ -16,7 +16,7 @@ const API_KEY = process.env.SECRET_KEY;
 app.use((req, res, next) => {
     const userKey = req.headers['x-api-key'] || req.query.api_key;
 
-    // if (req.path === '/health') return next();
+    if (req.path === '/health') return next();
 
     if (userKey === API_KEY) {
         next();
@@ -28,9 +28,6 @@ app.use((req, res, next) => {
 
 const upload = multer({ dest: 'uploads/' });
 const uploadProgress = new Map();
-
-
-
 
 app.post("/upload", upload.single("file"), async (req, res) => {
     console.log(req.file);
@@ -294,6 +291,11 @@ app.get("/search", async (req, res) => {
         res.status(500).json({ error: "Search failed" });
     }
 });
+
+app.get("/health", (req, res)=>{
+    res.status(200).send("OK");
+})
+
 
 const PORT = process.env.PORT || 8080;
 

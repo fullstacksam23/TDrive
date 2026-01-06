@@ -1,6 +1,6 @@
 import express from "express";
 import multer from "multer";
-import db from "./database/db.js";
+import supabase from "./database/supabase.js";
 import {sendFile, getChunkBuffer} from "./bot.js";
 import crypto from "crypto";
 import fs from "fs";
@@ -72,35 +72,45 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         });
     }
 
-    try{
-        //Insert into files
-        const insertFile = db.prepare("INSERT INTO files (file_name, mimetype, total_size) VALUES (?, ?, ?)");
-        const fileResult = insertFile.run(originalName, mimeType, totalSize);
-        const fileId = fileResult.lastInsertRowid;
+    try {
+        //insert into files
+        const { data: file, error: fileError } = await supabase
+            .from("files")
+            .insert({
+                file_name: originalName,
+                mimetype: mimeType,
+                total_size: totalSize
+            })
+            .select()
+            .single();
 
-        //Insert into chunks
-        const insertChunk = db.prepare(`
-            INSERT INTO file_chunks (file_id, chunk_index, telegram_file_id)
-            VALUES (?, ?, ?)
-        `);
+        if (fileError) throw fileError;
 
-        //Insert into files_search
-        const insertSearch = db.prepare(`
-            INSERT INTO files_search (file_id, file_name, tags, description)
-            VALUES (?, ?, ?, ?)
-        `);
+        const fileId = file.id;
 
-        insertSearch.run(fileId, originalName, "", "");
-        chunkData.forEach(chunk => {insertChunk.run(fileId, chunk.partNumber, chunk.telegramFileId);})
+        //insert into chunks
+        const chunksToInsert = chunkData.map(chunk => ({
+            file_id: fileId,
+            chunk_index: chunk.partNumber,
+            telegram_file_id: chunk.telegramFileId
+        }));
+
+        const { error: chunkError } = await supabase
+            .from("file_chunks")
+            .insert(chunksToInsert);
+
+        if (chunkError) throw chunkError;
+
         console.log("Database updated successfully");
 
+        // cleanup temp files
         fs.unlinkSync(filePath);
-        console.log(`Deleted temp files`);
+        console.log("Deleted temp files");
 
-
-    }catch(error){
-        console.log("Error writing to db: "+error);
+    } catch (error) {
+        console.error("Error writing to Supabase:", error);
     }
+
 
 });
 
@@ -138,8 +148,18 @@ app.get("/upload/status/:uploadId", (req, res) => {
 
 app.get("/files", async (req, res) => {
     try {
-        const rows = db.prepare("SELECT * FROM files").all();
-        return res.json(rows);
+        const {data, error} = await supabase
+            .from("files")
+            .select("*")
+            .order("uploaded_at", { ascending: false });
+
+
+        if (error) {
+            console.error("Supabase error:", error);
+            return res.status(500).json({ error: "failed to fetch files" });
+        }
+
+        return res.json(data);
     }catch(error){
         console.log("Error fetching files from db: "+error);
         return res.status(500).json({error: "failed to fetch files"});
@@ -150,26 +170,56 @@ app.get("/files/stats", async (req, res) => {
     const bytesToGB = (bytes) =>
         bytes ? (bytes / (1024 ** 3)).toFixed(2) : "0.00";
 
-    try{
-        const rows = db.prepare("SELECT SUM(total_size) AS totalBytes FROM files").get();
-        const totalGB = bytesToGB(rows.totalBytes);
-        return res.json(totalGB);
-    }catch(error){
-        console.log("Error fetching files stats from db: "+error);
-        return res.status(500).json({error: "failed to fetch files"});
-    }
-})
+    try {
+        const { data, error } = await supabase
+            .from("files")
+            .select("total_size");
 
+        if (error) {
+            console.error("Supabase error:", error);
+            return res.status(500).json({ error: "failed to fetch files stats" });
+        }
+        const totalBytes = data.reduce(
+            (sum, row) => sum + (row.total_size || 0),
+            0
+        );
+        const totalGB = bytesToGB(totalBytes);
+
+        return res.json({ totalGB });
+    } catch (err) {
+        console.error("Error fetching files stats:", err);
+        return res.status(500).json({ error: "failed to fetch files stats" });
+    }
+
+});
+//finish moving to supabase from here below
 app.get("/download/:fileId", async (req, res) => {
     try {
         const {fileId} = req.params;
-        const stmt = db.prepare("SELECT telegram_file_id from file_chunks WHERE file_id = ?  ORDER BY chunk_index ASC");
-        const telegramFileIds = stmt.all(fileId);
-        if (telegramFileIds.length === 0) return res.status(404).send("No telegram file found.");
-        console.log(telegramFileIds);
 
-        const stmt2 = db.prepare("SELECT file_name, mimetype from files WHERE id = ?");
-        const fileInfo = stmt2.get(fileId);
+        const {data:  telegramFileIds, error} = await supabase
+            .from("file_chunks")
+            .select("telegram_file_id")
+            .eq("file_id", fileId)
+            .order("chunk_index", { ascending: true });
+        if(error){
+            console.log("Error fetching chunks"+error);
+            return res.status(500).send("Failed to fetch file chunks");
+        }
+
+        if (telegramFileIds.length === 0) return res.status(404).send("No telegram file found.");
+
+        const {data: fileInfo, error: err2} = await supabase
+            .from("files")
+            .select("file_name, mimetype")
+            .eq("id", fileId)
+            .single();
+
+        if(err2){
+            console.error("Error fetching file info: ", err);
+            return res.status(500).send("Failed to fetch file info");
+        }
+        console.log(fileInfo);
         if (!fileInfo) return res.status(404).send("File not found");
 
         //set headers to tell browser to download the file and not display it
@@ -178,8 +228,6 @@ app.get("/download/:fileId", async (req, res) => {
         res.setHeader('Content-Type', fileInfo.mimetype || 'application/octet-stream');
 
         for (const item of telegramFileIds) {
-            console.log(`Streaming chunk: ${item.telegram_file_id}`);
-
             // Get the buffer for this chunk
             const chunkBuffer = await getChunkBuffer(item.telegram_file_id);
 
@@ -187,7 +235,7 @@ app.get("/download/:fileId", async (req, res) => {
             res.write(chunkBuffer);
         }
 
-        // 4. End the stream
+        // End the stream
         res.end();
     }catch(error){
         console.error("Download Stream Error:", error);
@@ -196,26 +244,36 @@ app.get("/download/:fileId", async (req, res) => {
     }
 })
 
-app.get("/search/:query", (req, res) => {
-    const { query } = req.params;
-
+app.get("/search", async (req, res) => {
+    const query = req.query.q;
+    let data, error;
     if (!query || !query.trim()) {
         return res.json([]);
     }
-
-    const ftsQuery = `"${query.trim()}"*`;
-
     try {
-        const stmt = db.prepare(`
-            SELECT f.*
-            FROM files f
-                     JOIN files_search ON f.id = files_search.file_id
-            WHERE files_search MATCH ?
-            ORDER BY bm25(files_search)
-        `);
+        //use FTS only for querys of length >= 5 otherwise use ilike
+        if (query.length >= 5) {
+            // Full-text search
+            ({ data, error } = await supabase
+                .from("files")
+                .select("*")
+                .textSearch("search_vector", query, {
+                    type: "websearch",
+                    config: "english"
+                }));
+        } else {
+            // Prefix fallback
+            ({ data, error } = await supabase
+                .from("files")
+                .select("*")
+                .ilike("file_name", `${query}%`));
+        }
 
-        const results = stmt.all(ftsQuery);
-        res.json(results);
+        if (error) {
+            console.log(error.message);
+        }
+        res.json(data);
+
     } catch (err) {
         console.error("Search error:", err);
         res.status(500).json({ error: "Search failed" });

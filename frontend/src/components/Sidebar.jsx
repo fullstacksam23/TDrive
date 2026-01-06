@@ -69,8 +69,7 @@ export function Sidebar({
         async function getStats(){
             const res = await fetch("http://localhost:8080/files/stats");
             const data = await res.json();
-            console.log(data);
-            setTotalGB(data);
+            setTotalGB(data.totalGB);
         }
         getStats();
     }, [])

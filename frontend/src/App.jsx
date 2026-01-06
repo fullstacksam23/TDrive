@@ -12,7 +12,7 @@ function App() {
 
     useEffect(() => {
         async function loadFiles() {
-            const url = searchQuery ? `http://localhost:8080/search/${encodeURIComponent(searchQuery)}` : "http://localhost:8080/files";
+            const url = searchQuery ? `http://localhost:8080/search/?q=${encodeURIComponent(searchQuery)}` : "http://localhost:8080/files";
             const files = await fetch(url);
             const data = await files.json();
             setFiles(data);

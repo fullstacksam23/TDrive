@@ -8,8 +8,6 @@ RUN npm install --production
 
 COPY . .
 
-# Create dirs for volumes
-RUN mkdir -p /app/data /app/uploads
 
 EXPOSE 8080
 

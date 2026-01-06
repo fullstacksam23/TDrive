@@ -251,8 +251,8 @@ app.get("/search", async (req, res) => {
         return res.json([]);
     }
     try {
-        //use FTS only for querys of length >= 5 otherwise use ilike
-        if (query.length >= 5) {
+        //use FTS only for querys of length >= 8 otherwise use ilike
+        if (query.length >= 8) {
             // Full-text search
             ({ data, error } = await supabase
                 .from("files")
@@ -266,7 +266,7 @@ app.get("/search", async (req, res) => {
             ({ data, error } = await supabase
                 .from("files")
                 .select("*")
-                .ilike("file_name", `${query}%`));
+                .ilike("file_name", `%${query}%`));
         }
 
         if (error) {

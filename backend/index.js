@@ -11,6 +11,21 @@ const app = express();
 app.use(cors({
     origin: "http://localhost:5173"
 }));
+const API_KEY = process.env.SECRET_KEY;
+
+app.use((req, res, next) => {
+    const userKey = req.headers['x-api-key'] || req.query.api_key;
+
+    // if (req.path === '/health') return next();
+
+    if (userKey === API_KEY) {
+        next();
+    } else {
+        res.status(401).send("Private: API Key Required");
+    }
+});
+
+
 const upload = multer({ dest: 'uploads/' });
 const uploadProgress = new Map();
 
@@ -216,7 +231,7 @@ app.get("/download/:fileId", async (req, res) => {
             .single();
 
         if(err2){
-            console.error("Error fetching file info: ", err);
+            console.error("Error fetching file info: ", err2);
             return res.status(500).send("Failed to fetch file info");
         }
         console.log(fileInfo);

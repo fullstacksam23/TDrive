@@ -10,6 +10,8 @@ import {
     Trash,
     Plus
 } from "lucide-react"
+const apiUrl = import.meta.env.VITE_API_URL;
+const apiKey = import.meta.env.VITE_SECRET_KEY;
 
 export function Sidebar({
                             onUploadStart,
@@ -29,7 +31,10 @@ export function Sidebar({
         const formData = new FormData();
         formData.append("file", file);
 
-        const res = await fetch("http://localhost:8080/upload", {
+        const res = await fetch(`${apiUrl}/upload`, {
+            headers: {
+                'x-api-key': apiKey
+            },
             method: "POST",
             body: formData
         });
@@ -38,7 +43,7 @@ export function Sidebar({
 
         // 2️⃣ Listen for progress via SSE
         const es = new EventSource(
-            `http://localhost:8080/upload/status/${uploadId}`
+            `${apiUrl}/upload/status/${uploadId}?api_key=${apiKey}`
         );
 
         es.onmessage = (event) => {
@@ -67,7 +72,11 @@ export function Sidebar({
     }
     useEffect(() => {
         async function getStats(){
-            const res = await fetch("http://localhost:8080/files/stats");
+            const res = await fetch(`${apiUrl}/files/stats`, {
+                headers: {
+                    'x-api-key': apiKey
+                }
+            });
             const data = await res.json();
             setTotalGB(data.totalGB);
         }

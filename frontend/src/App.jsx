@@ -4,6 +4,9 @@ import { FileGrid } from "@/components/file-grid";
 import {useEffect, useState} from "react";
 import Upload from "@/components/upload";
 
+const apiUrl = import.meta.env.VITE_API_URL;
+const apiKey = import.meta.env.VITE_SECRET_KEY;
+
 function App() {
     const [refreshKey, setRefreshKey] = useState(0);
     const [searchQuery, setSearchQuery] = useState("");
@@ -12,8 +15,12 @@ function App() {
 
     useEffect(() => {
         async function loadFiles() {
-            const url = searchQuery ? `http://localhost:8080/search/?q=${encodeURIComponent(searchQuery)}` : "http://localhost:8080/files";
-            const files = await fetch(url);
+            const url = searchQuery ? `${apiUrl}/search/?q=${encodeURIComponent(searchQuery)}` : `${apiUrl}/files`;
+            const files = await fetch(url, {
+                headers: {
+                    'x-api-key': apiKey
+                }
+                });
             const data = await files.json();
             setFiles(data);
         }

@@ -13,6 +13,8 @@ import {
     FileJson,
 
 } from "lucide-react";
+const apiUrl = import.meta.env.VITE_API_URL;
+const apiKey = import.meta.env.VITE_SECRET_KEY;
 
 function getIconForMimeType(mime) {
     if (!mime) return File;
@@ -40,7 +42,7 @@ export function FileGrid({files}) {
                 const iconData = getIconForMimeType(item.mimetype);
 
                 return (
-                    <a href={`http://localhost:8080/download/${item.id}`} key={item.id} download={item.file_name}>
+                    <a href={`${apiUrl}/download/${item.id}`} key={item.id} download={item.file_name}>
                     <div
                         className="
               border rounded-lg p-4 cursor-pointer flex flex-col transition

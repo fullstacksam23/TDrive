@@ -291,7 +291,7 @@ app.get("/search", async (req, res) => {
         res.status(500).json({ error: "Search failed" });
     }
 });
-
+//used by cron-job to keep deployment active
 app.get("/health", (req, res)=>{
     res.status(200).send("OK");
 })

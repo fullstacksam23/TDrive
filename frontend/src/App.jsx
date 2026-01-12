@@ -3,6 +3,7 @@ import { Header } from "@/components/header";
 import { FileGrid } from "@/components/file-grid";
 import {useEffect, useState} from "react";
 import Upload from "@/components/upload";
+import FileList from "@/components/file-list";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 const apiKey = import.meta.env.VITE_SECRET_KEY;
@@ -13,6 +14,7 @@ function App() {
     const [upload, setUpload] = useState(null);
     const [files, setFiles] = useState([]);
 
+    const [view, setView] = useState("list");
     useEffect(() => {
         async function loadFiles() {
             const url = searchQuery ? `${apiUrl}/search/?q=${encodeURIComponent(searchQuery)}` : `${apiUrl}/files`;
@@ -48,8 +50,9 @@ function App() {
 
 
             <div className="flex-1 flex flex-col">
-                <Header setSearchQuery={setSearchQuery} />
-                <FileGrid files={files} />
+                <Header setSearchQuery={setSearchQuery} view={view} setView={setView} />
+                {view === "list" ? <FileList files={files} /> : <FileGrid files={files} />}
+
                 <div className="fixed bottom-6 right-6 z-50">
                     {upload && (
                         <Upload

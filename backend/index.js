@@ -204,7 +204,7 @@ app.get("/files/stats", async (req, res) => {
     }
 
 });
-//finish moving to supabase from here below
+
 app.get("/download/:fileId", async (req, res) => {
     try {
         const {fileId} = req.params;

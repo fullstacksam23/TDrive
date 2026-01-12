@@ -1,8 +1,11 @@
 import {useEffect, useState} from "react";
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Button } from "@/components/ui/button"
+import { LayoutGrid, List } from "lucide-react"
 
-export function Header({setSearchQuery}) {
+export function Header({setSearchQuery, view, setView}) {
     const [value, setValue] = useState("");
     //debounce logic
     useEffect(() => {
@@ -38,7 +41,27 @@ export function Header({setSearchQuery}) {
                     placeholder="Search in TDrive..."
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
+                    name="search"
                 />
+            </div>
+            <div className="ml-auto flex items-center gap-1 rounded-md border p-1">
+                <Button
+                    variant={view === "list" ? "secondary" : "ghost"}
+                    size="icon"
+                    onClick={() => setView("list")}
+                    aria-label="List view"
+                >
+                    <List className="h-4 w-4" />
+                </Button>
+
+                <Button
+                    variant={view === "grid" ? "secondary" : "ghost"}
+                    size="icon"
+                    onClick={() => setView("grid")}
+                    aria-label="Grid view"
+                >
+                    <LayoutGrid className="h-4 w-4" />
+                </Button>
             </div>
         </header>
     )

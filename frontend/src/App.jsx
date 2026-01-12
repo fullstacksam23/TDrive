@@ -1,9 +1,9 @@
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
-import { FileGrid } from "@/components/file-grid";
+import { Sidebar } from "@/components/Sidebar";
+import { Header } from "@/components/Header";
+import { FileGrid } from "@/components/File-grid";
 import {useEffect, useState} from "react";
-import Upload from "@/components/upload";
-import FileList from "@/components/file-list";
+import Upload from "@/components/Upload";
+import FileList from "@/components/File-list";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 const apiKey = import.meta.env.VITE_SECRET_KEY;

@@ -2,16 +2,13 @@
 
 > Unlock unlimited cloud storage using Telegram. Split files into chunks and store them securely with seamless file management across your messaging app and web interface.
 
+![Frontend Tests](https://github.com/fullstacksam23/TDrive/actions/workflows/tests.yml/badge.svg)
 ![Status](https://img.shields.io/badge/status-active-success?style=flat-square)
 ![License](https://img.shields.io/badge/license-ISC-blue?style=flat-square)
-![Node](https://img.shields.io/badge/node-%3E%3D18-green?style=flat-square)
-![React](https://img.shields.io/badge/react-19-blue?style=flat-square)
-![Express](https://img.shields.io/badge/express-5.2-lightgrey?style=flat-square)
 ![Telegram](https://img.shields.io/badge/telegram-bot_api-0088cc?style=flat-square)
 ![Supabase](https://img.shields.io/badge/supabase-postgresql-3ecf8e?style=flat-square)
-![Vite](https://img.shields.io/badge/vite-7.2-646cff?style=flat-square)
-![Tailwind](https://img.shields.io/badge/tailwind_css-4.1-38b2ac?style=flat-square)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ed?style=flat-square)
+
 
 ## Table of Contents
 

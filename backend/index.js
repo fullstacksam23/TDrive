@@ -5,12 +5,22 @@ import {sendFile, getChunkBuffer} from "./bot.js";
 import crypto from "crypto";
 import fs from "fs";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // limit each IP to 200 requests per window
+    message: "Too many requests from this IP, please try again later.",
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 const app = express();
 app.use(cors({
     origin: "http://localhost:5173"
 }));
+app.use(limiter);
+
 const API_KEY = process.env.SECRET_KEY;
 
 app.use((req, res, next) => {
@@ -25,11 +35,22 @@ app.use((req, res, next) => {
     }
 });
 
+//limit filesize to 2gb for demo
+const upload = multer({
+    dest: "uploads/",
+    limits: {
+        fileSize: 2 * 1024 * 1024 * 1024 // 2GB limit
+    }
+});
 
-const upload = multer({ dest: 'uploads/' });
 const uploadProgress = new Map();
 
-app.post("/upload", upload.single("file"), async (req, res) => {
+const uploadLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20
+});
+
+app.post("/upload", uploadLimiter, upload.single("file"), async (req, res) => {
     console.log(req.file);
 
     const uploadId = crypto.randomUUID();
@@ -296,6 +317,20 @@ app.get("/health", (req, res)=>{
     res.status(200).send("OK");
 })
 
+app.use((err, req, res, next) => {
+    console.log(err);
+    if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+            error: "File too large. Max size is 2GB"
+        });
+    }
+
+    console.error(err);
+
+    res.status(500).json({
+        error: "Internal server error"
+    });
+});
 
 const PORT = process.env.PORT || 8080;
 

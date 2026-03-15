@@ -32,12 +32,14 @@ export function Sidebar({
 
         const formData = new FormData();
         formData.append("file", file);
+        let uploadId;
         try {
             const res = await api.post('/upload', formData)
-            const {uploadId} = res.data;
+            uploadId = res.data.uploadId;
         }catch(err) {
             console.error('Upload Failed: ', err);
             onUploadComplete?.();
+            return;
         }
         // Listen for progress via SSE
         const es = new EventSource(
@@ -53,6 +55,7 @@ export function Sidebar({
                 es.close();
                 onUploadSuccess?.();
                 onUploadComplete?.();
+                e.target.value = "";
             }
         };
 
@@ -60,6 +63,7 @@ export function Sidebar({
             console.error("SSE connection error");
             es.close();
             onUploadComplete?.();
+            e.target.value = "";
         };
     };
 

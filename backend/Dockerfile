@@ -8,6 +8,7 @@ RUN npm install --production
 
 COPY . .
 
+RUN mkdir -p uploads
 
 EXPOSE 8080
 

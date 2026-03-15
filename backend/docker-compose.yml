@@ -1,9 +1,30 @@
 services:
-  backend:
+
+  api:
     build: .
-    container_name: tdrive-backend
+    container_name: tdrive-api
     ports:
       - "8080:8080"
     env_file:
       - .env
-    restart: unless-stopped
+    depends_on:
+      - redis
+    volumes:
+      - ./uploads:/app/uploads
+
+  worker:
+    build: .
+    container_name: tdrive-worker
+    command: node worker.js
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./uploads:/app/uploads
+
+  redis:
+    image: redis:7
+    container_name: tdrive-redis
+    ports:
+      - "6379:6379"

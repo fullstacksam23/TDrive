@@ -63,7 +63,7 @@ async function sendFile(chunk, fileName, retries = 5) {
 
 
 
-async function getChunkBuffer(telegramFileId) {
+async function getChunkStream(telegramFileId) {
     try {
         const file = await bot.api.getFile(telegramFileId);
         const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
@@ -71,14 +71,14 @@ async function getChunkBuffer(telegramFileId) {
         const response = await axios({
             method: 'get',
             url: url,
-            responseType: 'arraybuffer'
+            responseType: 'stream'
         });
 
-        return Buffer.from(response.data);
+        return response.data;
     }catch(error) {
         console.error("Failed to download chunk:", error);
         throw error;
     }
 }
 
-export {sendFile, getChunkBuffer};
+export {sendFile, getChunkStream};

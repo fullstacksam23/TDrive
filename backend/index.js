@@ -1,10 +1,13 @@
 import express from "express";
 import Busboy from "busboy";
 import supabase from "./database/supabase.js";
-import {sendFile, getChunkBuffer} from "./bot.js";
+import {sendFile, getChunkStream} from "./bot.js";
 import crypto from "crypto";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import {uploadQueue, setUploadProgress, getUploadProgress, deleteUploadProgress, connection} from "./redis.js";
+import fs from "fs";
+import path from "path";
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -13,6 +16,10 @@ const limiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false
 });
+
+if (!fs.existsSync("uploads")) {
+    fs.mkdirSync("uploads");
+}
 
 const app = express();
 app.use(cors({
@@ -34,53 +41,29 @@ app.use((req, res, next) => {
     }
 });
 
-
-const uploadProgress = new Map();
-setInterval(() => {
-
-    const now = Date.now();
-    const MAX_AGE = 10 * 60 * 1000; // 10 minutes
-
-    for (const [uploadId, data] of uploadProgress.entries()) {
-
-        if (now - data.createdAt > MAX_AGE) {
-            console.log("Cleaning stale upload:", uploadId);
-            uploadProgress.delete(uploadId);
-        }
-
-    }
-
-}, 60 * 1000); // run clean up job every minute
-
 const uploadLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20
 });
+connection.on("connect", () => {
+    console.log("Redis connected");
+});
 
-app.post("/upload", uploadLimiter, (req, res) => {
+app.post("/upload", uploadLimiter, async (req, res) => {
 
-    const busboy = Busboy({
-        headers: req.headers,
-        limits: { fileSize: 2 * 1024 * 1024 * 1024 }
-    });
+    const busboy = Busboy({ headers: req.headers });
 
-    const totalBytes = parseInt(req.headers["content-length"] || "0");
     const uploadId = crypto.randomUUID();
-    const CHUNK_SIZE = 17 * 1024 * 1024;
-    let buffer = Buffer.alloc(0);
-    let partNumber = 0;
-    let totalSize = 0;
+    const uploadPath = path.join("uploads", uploadId);
 
+    let totalSize = 0;
     let originalName = "";
     let mimeType = "";
 
-    let chunkData = [];
-
-    uploadProgress.set(uploadId, {
+    await setUploadProgress(uploadId, {
         uploadedBytes: 0,
-        totalBytes: totalBytes,
-        fileName: "",
-        createdAt: Date.now()
+        totalBytes: 1, // prevents NaN in progress bar
+        fileName: ""
     });
 
     res.json({ uploadId });
@@ -90,144 +73,24 @@ app.post("/upload", uploadLimiter, (req, res) => {
         originalName = info.filename;
         mimeType = info.mimeType;
 
-        uploadProgress.set(uploadId, {
-            ...uploadProgress.get(uploadId),
-            fileName: originalName
-        });
-        file.on("limit", () => {
+        const writeStream = fs.createWriteStream(uploadPath);
 
-            console.log("File too large");
-
-            uploadProgress.set(uploadId, {
-                ...uploadProgress.get(uploadId),
-                error: true
-            });
-
-        });
         file.on("data", async (data) => {
-
-            file.pause();   // pause incoming stream
-
-            try {
-
-                totalSize += data.length;
-
-                uploadProgress.set(uploadId, {
-                    ...uploadProgress.get(uploadId),
-                    uploadedBytes: totalSize
-                });
-
-                buffer = Buffer.concat([buffer, data], buffer.length + data.length);
-
-                while (buffer.length >= CHUNK_SIZE) {
-
-                    const chunk = buffer.slice(0, CHUNK_SIZE);
-                    buffer = buffer.slice(CHUNK_SIZE);
-
-                    partNumber++;
-
-                    const telegramFileId = await sendFile(
-                        chunk,
-                        `${originalName}.part${partNumber}`
-                    );
-
-                    chunkData.push({
-                        partNumber,
-                        telegramFileId
-                    });
-
-                    uploadProgress.set(uploadId, {
-                        ...uploadProgress.get(uploadId),
-                        current: partNumber
-                    });
-                }
-
-            } catch (err) {
-
-                uploadProgress.set(uploadId, {
-                    ...uploadProgress.get(uploadId),
-                    error: true
-                });
-
-                console.error("Chunk upload failed:", err);
-            }
-
-            file.resume(); // resume stream
+            totalSize += data.length;
         });
 
-        file.on("end", async () => {
+        file.pipe(writeStream);
 
-            if (buffer.length > 0) {
+        writeStream.on("finish", async () => {
 
-                partNumber++;
-
-                const telegramFileId = await sendFile(
-                    buffer,
-                    `${originalName}.part${partNumber}`
-                );
-
-                chunkData.push({
-                    partNumber,
-                    telegramFileId
-                });
-
-                uploadProgress.set(uploadId, {
-                    ...uploadProgress.get(uploadId),
-                    current: partNumber
-                });
-            }
-
-            uploadProgress.set(uploadId, {
-                ...uploadProgress.get(uploadId),
-                totalBytes: totalSize,
-                done: true
+            await uploadQueue.add("processUpload", {
+                uploadId,
+                filePath: uploadPath,
+                fileName: originalName,
+                mimeType,
+                totalSize
             });
 
-            setTimeout(() => {
-                uploadProgress.delete(uploadId);
-            }, 60000);
-
-            try {
-
-                const { data: fileRow, error } = await supabase
-                    .from("files")
-                    .insert({
-                        file_name: originalName,
-                        mimetype: mimeType,
-                        total_size: totalSize
-                    })
-                    .select()
-                    .single();
-
-                if (error) throw error;
-
-                const chunksToInsert = chunkData.map(chunk => ({
-                    file_id: fileRow.id,
-                    chunk_index: chunk.partNumber,
-                    telegram_file_id: chunk.telegramFileId
-                }));
-
-                await supabase
-                    .from("file_chunks")
-                    .insert(chunksToInsert);
-
-                console.log("Database updated successfully");
-
-            } catch (err) {
-                console.error("Database write failed:", err);
-            }
-
-        });
-
-    });
-
-    busboy.on("error", err => {
-
-        console.error("Upload stream error:", err);
-
-        uploadProgress.set(uploadId, {
-            ...uploadProgress.get(uploadId),
-            error: true
         });
 
     });
@@ -242,27 +105,36 @@ app.get("/upload/status/:uploadId", (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // prevents proxy buffering
 
-    const interval = setInterval(() => {
-        const data = uploadProgress.get(uploadId);
-        if (!data) return;
+    const interval = setInterval(async () => {
+        try {
+            const data = await getUploadProgress(uploadId);
+            if (!data) return;
 
-        const percent = data.totalBytes
-            ? Math.round((data.uploadedBytes / data.totalBytes) * 100)
-            : 0;
+            const percent = data.totalBytes
+                ? Math.round((data.uploadedBytes / data.totalBytes) * 100)
+                : 0;
 
-        res.write(`data: ${JSON.stringify({
-            fileName: data.fileName,
-            progress: percent,
-            done: data.done || false
-        })}\n\n`);
+            res.write(`data: ${JSON.stringify({
+                fileName: data.fileName,
+                progress: percent,
+                done: data.done || false
+            })}\n\n`);
 
-        if (data.done || data.error) {
-            clearInterval(interval);
-            uploadProgress.delete(uploadId);
-            res.end();
+            if (data.done || data.error) {
+                clearInterval(interval);
+                await deleteUploadProgress(uploadId);
+                res.end();
+            }
+        }catch (err){
+            console.error("SSE error:", err);
         }
     }, 500);
+    // stop interval if client disconnects
+    req.on("close", () => {
+        clearInterval(interval);
+    });
 });
 
 
@@ -314,6 +186,12 @@ app.get("/files/stats", async (req, res) => {
 });
 
 app.get("/download/:fileId", async (req, res) => {
+    let clientDisconnected = false;
+
+    res.on("aborted", () => {
+        clientDisconnected = true;
+        console.log("Client disconnected during download");
+    });
     try {
         const {fileId} = req.params;
 
@@ -347,15 +225,29 @@ app.get("/download/:fileId", async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
         res.setHeader('Content-Type', fileInfo.mimetype || 'application/octet-stream');
 
-        for (const item of telegramFileIds) {
-            // Get the buffer for this chunk
-            const chunkBuffer = await getChunkBuffer(item.telegram_file_id);
+        const CONCURRENCY = 4;
 
-            // Send it directly to the user's browser
-            res.write(chunkBuffer);
+        for (let i = 0; i < telegramFileIds.length; i += CONCURRENCY) {
+
+            const batch = telegramFileIds.slice(i, i + CONCURRENCY);
+
+            const streams = await Promise.all(
+                batch.map(item => getChunkStream(item.telegram_file_id))
+            );
+
+            for (const stream of streams) {
+                if (clientDisconnected) {
+                    stream.destroy();
+                    break;
+                }
+                await new Promise((resolve, reject) => {
+                    stream.pipe(res, { end: false });
+                    stream.on("end", resolve);
+                    stream.on("error", reject);
+
+                });
+            }
         }
-
-        // End the stream
         res.end();
     }catch(error){
         console.error("Download Stream Error:", error);
@@ -420,6 +312,17 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 8080;
+
+process.on("uncaughtException", (err) => {
+    console.error("UNCAUGHT EXCEPTION");
+    console.error(err);
+    process.exit(1); // exit so process manager can restart
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("UNHANDLED REJECTION");
+    console.error("Reason:", reason);
+});
 
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server started on port ${PORT}`);

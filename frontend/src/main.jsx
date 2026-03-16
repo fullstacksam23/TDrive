@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Login } from "@/pages/Login";
 import { Signup } from "@/pages/Signup";
+import { Home } from "@/pages/Home";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -30,14 +31,16 @@ createRoot(document.getElementById("root")).render(
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <App />
-              </ProtectedRoute>
-            }
-          />
+            <Route path="/" element={<Home />} />
+
+            <Route
+                path="/dashboard"
+                element={
+                    <ProtectedRoute>
+                        <App />
+                    </ProtectedRoute>
+                }
+            />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="*" element={<Navigate to="/" replace />} />

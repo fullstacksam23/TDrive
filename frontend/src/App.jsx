@@ -55,7 +55,7 @@ function App() {
     }
 
     return (
-        <div className="flex flex-1 min-h-0 w-full overflow-hidden">
+        <div className="flex min-h-screen w-full bg-background text-foreground">
             <Sidebar
                 onUploadStart={(fileName) =>
                     setUpload({ fileName, progress: 0 })

@@ -32,9 +32,22 @@ function formatDate(isoString) {
 }
 
 export default function FileList({ files }) {
+    if (!files.length) {
+        return (
+            <div className="mx-4 my-6 flex-1 min-h-0 sm:mx-6">
+                <div className="flex h-full min-h-70 items-center justify-center rounded-xl border border-dashed border-border/80 bg-card/70 p-8 text-center shadow-sm">
+                    <div>
+                        <p className="text-base font-semibold text-foreground">No files yet</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Upload your first file using the New button in the sidebar.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="mx-4 my-6 flex-1 min-h-0 sm:mx-6">
-            <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="overflow-hidden rounded-xl border border-border/80 bg-card/90 shadow-sm">
                 <Table>
                     <TableHeader>
                         <TableRow className="border-b border-border hover:bg-transparent">

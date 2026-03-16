@@ -86,10 +86,7 @@ export function Sidebar({
     }, [])
 
     return (
-        <aside className="
-      w-64 shrink-0 border-r h-full min-h-0 flex flex-col
-      bg-background text-foreground border-border
-    ">
+        <aside className="w-64 shrink-0 border-r border-border/80 bg-background/90 text-foreground shadow-sm backdrop-blur supports-backdrop-filter:bg-background/75 h-full min-h-0 flex flex-col">
             <div className="flex items-center gap-3 px-4 py-4">
                 <img
                     src="/logo.jpg"
@@ -104,7 +101,7 @@ export function Sidebar({
             <div className="px-4 pb-2">
                 <Button
                     variant="outline"
-                    className="h-9 w-full justify-center gap-2 border-border bg-muted/60 hover:bg-muted"
+                    className="h-9 w-full justify-center gap-2 border-border/80 bg-muted/50 hover:bg-muted"
                     onClick={handleNewClick}
                 >
                     <Plus className="h-4 w-4" />
@@ -149,7 +146,7 @@ function NavItem({ icon, label, active }) {
             type="button"
             className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 active
-                    ? "bg-accent text-accent-foreground font-medium"
+                    ? "bg-accent/85 text-accent-foreground font-medium"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
         >

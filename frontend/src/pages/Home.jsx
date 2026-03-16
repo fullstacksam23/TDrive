@@ -1,7 +1,8 @@
-import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { LogOut } from "lucide-react";
 import {
     Cloud,
     ShieldCheck,
@@ -42,10 +43,7 @@ export function Home() {
 
                         {!user ? (
                             <>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => navigate("/login")}
-                                >
+                                <Button variant="ghost" onClick={() => navigate("/login")}>
                                     Login
                                 </Button>
 
@@ -57,18 +55,20 @@ export function Home() {
                                 </Button>
                             </>
                         ) : (
+                            <>
                             <Button
                                 onClick={() => navigate("/dashboard")}
                                 className="bg-gradient-to-r from-[#229ED9] to-[#60A5FA] text-white"
                             >
                                 Go to My Drive
                             </Button>
+                                {/* Avatar Dropdown */}
+                                <AvatarDropdown user={user} />
+                            </>
                         )}
 
-                        <img
-                            src={`https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=ffffff`}
-                            className="h-9 w-9 rounded-full border border-border"
-                        />
+
+
                     </div>
                 </div>
             </header>
@@ -231,6 +231,64 @@ export function Home() {
                 </div>
 
             </footer>
+
+        </div>
+    );
+}
+
+function AvatarDropdown({ user }) {
+    const { logout } = useAuth();
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+
+    const displayName = useMemo(() => {
+        if (user?.email) return user.email.split("@")[0];
+        return "guest";
+    }, [user]);
+
+    const avatarUrl =
+        `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=ffffff`;
+
+    useEffect(() => {
+        function handleClickOutside(e) {
+            if (ref.current && !ref.current.contains(e.target)) {
+                setOpen(false);
+            }
+        }
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () =>
+            document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div ref={ref} className="relative">
+
+            <img
+                src={avatarUrl}
+                onClick={() => setOpen(!open)}
+                className="h-9 w-9 rounded-full border border-border cursor-pointer"
+            />
+
+            {open && (
+                <div className="absolute right-0 mt-2 w-48 rounded-md border bg-background shadow-lg">
+
+                    <div className="px-3 py-2 text-sm font-medium">
+                        {user?.email || "Guest"}
+                    </div>
+
+                    <div className="border-t"/>
+
+                    <button
+                        onClick={() => logout()}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted"
+                    >
+                        <LogOut className="h-4 w-4" />
+                        Sign out
+                    </button>
+
+                </div>
+            )}
 
         </div>
     );

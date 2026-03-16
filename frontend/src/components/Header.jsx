@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { Search, Moon, Sun, LogOut } from "lucide-react";
+import { Search, Moon, Sun, LogOut, LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, List } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 const THEME_STORAGE_KEY = "tdrive-theme";
@@ -10,111 +9,138 @@ const THEME_STORAGE_KEY = "tdrive-theme";
 function getPreferredTheme() {
     if (typeof window === "undefined") return "dark";
     try {
-        const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
         if (stored === "light" || stored === "dark") return stored;
-    } catch (e) {}
-    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    } catch {}
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
         return "dark";
     }
     return "light";
 }
 
 function applyTheme(theme) {
-    if (typeof document === "undefined") return;
     const root = document.documentElement;
-    if (theme === "dark") {
-        root.classList.add("dark");
-    } else {
-        root.classList.remove("dark");
-    }
+    theme === "dark"
+        ? root.classList.add("dark")
+        : root.classList.remove("dark");
 }
 
 export function Header({ setSearchQuery, view, setView }) {
     const [value, setValue] = useState("");
-    const [theme, setTheme] = useState(() => getPreferredTheme());
-    const { logout } = useAuth();
+    const [theme, setTheme] = useState(getPreferredTheme);
+    const [open, setOpen] = useState(false);
+
+    const { user, logout } = useAuth();
+
+    const dropdownRef = useRef(null);
+
+    const displayName = useMemo(() => {
+        if (user?.email) return user.email.split("@")[0];
+        return "guest";
+    }, [user]);
+
+    const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=ffffff`;
 
     useEffect(() => {
         const timeout = setTimeout(() => {
             setSearchQuery(value.trim());
         }, 300);
         return () => clearTimeout(timeout);
-    }, [value, setSearchQuery]);
+    }, [value]);
 
     useEffect(() => {
         applyTheme(theme);
-        try {
-            window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-        } catch (e) {}
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
     }, [theme]);
 
-    const toggleTheme = () => {
-        setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-    };
+    // close dropdown when clicking outside
+    useEffect(() => {
+        function handleClickOutside(e) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const toggleTheme = () =>
+        setTheme(prev => (prev === "dark" ? "light" : "dark"));
 
     return (
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background px-4 sm:px-6">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border/80 bg-background/85 px-4 shadow-sm backdrop-blur sm:px-6">
+
+            {/* Search */}
             <div className="relative flex-1 max-w-md">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                    className="h-9 pl-9 bg-muted/30 focus-visible:bg-background"
+                    className="h-9 pl-9"
                     placeholder="Search in TDrive..."
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
-                    name="search"
-                    aria-label="Search files"
                 />
             </div>
-            <div className="flex items-center gap-2">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={toggleTheme}
-                    aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                >
-                    {theme === "dark" ? (
-                        <Sun className="h-4 w-4" />
-                    ) : (
-                        <Moon className="h-4 w-4" />
-                    )}
+
+            <div className="ml-auto flex items-center gap-2">
+
+                {/* Theme */}
+                <Button variant="ghost" size="icon" onClick={toggleTheme}>
+                    {theme === "dark"
+                        ? <Sun className="h-4 w-4"/>
+                        : <Moon className="h-4 w-4"/>
+                    }
                 </Button>
-                <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-muted/30 p-0.5">
+
+                {/* View */}
+                <div className="flex items-center gap-0.5 rounded-lg border bg-muted/40 p-0.5">
                     <Button
                         variant={view === "list" ? "secondary" : "ghost"}
                         size="icon"
-                        className="h-8 w-8"
                         onClick={() => setView("list")}
-                        aria-label="List view"
-                        aria-pressed={view === "list"}
                     >
-                        <List className="h-4 w-4" />
+                        <List className="h-4 w-4"/>
                     </Button>
+
                     <Button
                         variant={view === "grid" ? "secondary" : "ghost"}
                         size="icon"
-                        className="h-8 w-8"
                         onClick={() => setView("grid")}
-                        aria-label="Grid view"
-                        aria-pressed={view === "grid"}
                     >
-                        <LayoutGrid className="h-4 w-4" />
+                        <LayoutGrid className="h-4 w-4"/>
                     </Button>
                 </div>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => {
-                        logout().catch(() => {});
-                    }}
-                    aria-label="Log out"
-                    title="Log out"
-                >
-                    <LogOut className="h-4 w-4" />
-                </Button>
+
+                {/* Avatar Dropdown */}
+                <div ref={dropdownRef} className="relative">
+
+                    <img
+                        src={avatarUrl}
+                        onClick={() => setOpen(!open)}
+                        className="h-9 w-9 rounded-full border cursor-pointer"
+                    />
+
+                    {open && (
+                        <div className="absolute right-0 mt-2 w-48 rounded-md border bg-background shadow-lg">
+
+                            <div className="px-3 py-2 text-sm font-medium">
+                                {user?.email}
+                            </div>
+
+                            <div className="border-t"/>
+
+                            <button
+                                onClick={() => logout()}
+                                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted"
+                            >
+                                <LogOut className="h-4 w-4"/>
+                                Sign out
+                            </button>
+
+                        </div>
+                    )}
+
+                </div>
+
             </div>
         </header>
     );

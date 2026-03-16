@@ -13,7 +13,7 @@ export function Login() {
   const navigate = useNavigate();
 
   if (!loading && user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   const handleSubmit = async (e) => {
@@ -22,7 +22,7 @@ export function Login() {
     setSubmitting(true);
     try {
       await login({ email, password });
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err.message ?? "Failed to log in");
     } finally {

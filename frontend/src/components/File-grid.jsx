@@ -2,6 +2,19 @@ import {Download} from "lucide-react";
 import {downloadFile, getIconForMimeType} from "@/lib/utils.js";
 
 export function FileGrid({ files }) {
+    if (!files.length) {
+        return (
+            <div className="mx-4 my-6 flex-1 min-h-0 sm:mx-6">
+                <div className="flex h-full min-h-70 items-center justify-center rounded-xl border border-dashed border-border/80 bg-card/70 p-8 text-center shadow-sm">
+                    <div>
+                        <p className="text-base font-semibold text-foreground">No files yet</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Upload your first file to start building your drive.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="mx-4 my-6 flex-1 min-h-0 sm:mx-6">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
@@ -11,9 +24,9 @@ export function FileGrid({ files }) {
                         <div
                             key={item.id}
                             onClick={() => downloadFile(item.id, item.file_name)}
-                            className="group relative flex flex-col rounded-lg border border-border bg-card p-4 cursor-pointer transition-colors hover:bg-accent hover:border-border"
+                            className="group relative flex cursor-pointer flex-col rounded-xl border border-border/80 bg-card/90 p-4 shadow-sm transition-colors hover:border-border hover:bg-accent"
                         >
-                            <div className="relative flex min-h-[80px] flex-1 items-center justify-center text-muted-foreground">
+                            <div className="relative flex min-h-20 flex-1 items-center justify-center text-muted-foreground">
                                 <iconData.icon className={`h-10 w-10 shrink-0 ${iconData.color}`} />
                                 <button
                                     onClick={(e) => {

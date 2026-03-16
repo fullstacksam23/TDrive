@@ -1,68 +1,106 @@
-import {useEffect, useState} from "react";
-import { Input } from "@/components/ui/input"
-import { Search } from "lucide-react"
-import { Switch } from "@/components/ui/switch"
-import { Button } from "@/components/ui/button"
-import { LayoutGrid, List } from "lucide-react"
+import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Search, Moon, Sun } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { LayoutGrid, List } from "lucide-react";
 
-export function Header({setSearchQuery, view, setView}) {
+const THEME_STORAGE_KEY = "tdrive-theme";
+
+function getPreferredTheme() {
+    if (typeof window === "undefined") return "dark";
+    try {
+        const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+        if (stored === "light" || stored === "dark") return stored;
+    } catch (e) {}
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        return "dark";
+    }
+    return "light";
+}
+
+function applyTheme(theme) {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    if (theme === "dark") {
+        root.classList.add("dark");
+    } else {
+        root.classList.remove("dark");
+    }
+}
+
+export function Header({ setSearchQuery, view, setView }) {
     const [value, setValue] = useState("");
-    //debounce logic
+    const [theme, setTheme] = useState(() => getPreferredTheme());
+
     useEffect(() => {
         const timeout = setTimeout(() => {
             setSearchQuery(value.trim());
         }, 300);
+        return () => clearTimeout(timeout);
+    }, [value, setSearchQuery]);
 
-        return () => clearTimeout(timeout);  //cleanup function run everytime the value changes before the effect is run again
-    }, [value]);
+    useEffect(() => {
+        applyTheme(theme);
+        try {
+            window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+        } catch (e) {}
+    }, [theme]);
+
+    const toggleTheme = () => {
+        setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+    };
 
     return (
-        <header className="
-      w-full h-16 flex items-center px-6 gap-4 sticky top-0 z-10
-      border-b bg-background
-      dark:bg-neutral-900 dark:border-neutral-800
-    ">
-            <div className="flex-1 max-w-xl relative">
-                <Search
-                    className="
-            absolute left-2 top-2.5 h-4 w-4
-            text-muted-foreground
-            dark:text-neutral-400
-          "
-                />
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background px-4 sm:px-6">
+            <div className="relative flex-1 max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                    className="
-            pl-8
-            dark:bg-neutral-800
-            dark:border-neutral-700
-            dark:text-neutral-200
-            dark:placeholder:text-neutral-500
-          "
+                    className="h-9 pl-9 bg-muted/30 focus-visible:bg-background"
                     placeholder="Search in TDrive..."
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     name="search"
+                    aria-label="Search files"
                 />
             </div>
-            <div className="ml-auto flex items-center gap-1 rounded-md border p-1">
+            <div className="flex items-center gap-2">
                 <Button
-                    variant={view === "list" ? "secondary" : "ghost"}
+                    type="button"
+                    variant="ghost"
                     size="icon"
-                    onClick={() => setView("list")}
-                    aria-label="List view"
+                    className="h-8 w-8"
+                    onClick={toggleTheme}
+                    aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                 >
-                    <List className="h-4 w-4" />
+                    {theme === "dark" ? (
+                        <Sun className="h-4 w-4" />
+                    ) : (
+                        <Moon className="h-4 w-4" />
+                    )}
                 </Button>
-
-                <Button
-                    variant={view === "grid" ? "secondary" : "ghost"}
-                    size="icon"
-                    onClick={() => setView("grid")}
-                    aria-label="Grid view"
-                >
-                    <LayoutGrid className="h-4 w-4" />
-                </Button>
+                <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-muted/30 p-0.5">
+                    <Button
+                        variant={view === "list" ? "secondary" : "ghost"}
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setView("list")}
+                        aria-label="List view"
+                        aria-pressed={view === "list"}
+                    >
+                        <List className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant={view === "grid" ? "secondary" : "ghost"}
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setView("grid")}
+                        aria-label="Grid view"
+                        aria-pressed={view === "grid"}
+                    >
+                        <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
         </header>
-    )
+    );
 }

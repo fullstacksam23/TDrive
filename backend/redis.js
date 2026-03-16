@@ -2,9 +2,9 @@ import { Queue } from "bullmq";
 import IORedis from "ioredis";
 
 export const connection = new IORedis({
-    host: "redis",
+    host: "redis", //rename to a localhost port for local testing without docker
     port: 6379,
-    maxRetriesPerRequest: null // required for BullMQ stability
+    maxRetriesPerRequest: null
 });
 
 // Queue for uploads

@@ -82,58 +82,56 @@ export function Sidebar({
 
     return (
         <aside className="
-      w-64 border-r h-screen flex flex-col
-      bg-background
-      dark:bg-neutral-900 dark:border-neutral-800
+      w-64 shrink-0 border-r h-full min-h-0 flex flex-col
+      bg-background text-foreground border-border
     ">
-            <div className="flex items-center gap-3 p-4">
+            <div className="flex items-center gap-3 px-4 py-4">
                 <img
                     src="/logo.jpg"
                     alt="TDrive Logo"
-                    className="w-12 h-12 rounded-full object-cover"
+                    className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-border"
                 />
-                <h1 className="text-blue-300 font-semibold text-2xl tracking-wide">
+                <h1 className="text-lg font-semibold tracking-tight text-foreground">
                     TDrive
                 </h1>
             </div>
 
-            <div className="p-4">
+            <div className="px-4 pb-2">
                 <Button
                     variant="outline"
-                    className="w-full flex items-center gap-2"
+                    className="h-9 w-full justify-center gap-2 border-border bg-muted/60 hover:bg-muted"
                     onClick={handleNewClick}
                 >
                     <Plus className="h-4 w-4" />
                     New
                 </Button>
-
-                {/* Hidden file input */}
                 <input
                     type="file"
                     ref={fileInputRef}
                     className="hidden"
                     onChange={handleFileChange}
+                    aria-hidden
                 />
             </div>
 
-            <ScrollArea className="flex-1 px-2">
-                <div className="space-y-1">
-                    <NavItem icon={<Home />} label="Home" active />
-                    <NavItem icon={<Cloud />} label="My Drive" />
-                    <NavItem icon={<Clock />} label="Recent" />
-                    <NavItem icon={<Star />} label="Starred" />
-                    <NavItem icon={<Trash />} label="Trash" />
-                </div>
+            <ScrollArea className="flex-1 min-h-0 px-3">
+                <nav className="space-y-0.5 py-2" aria-label="Main navigation">
+                    <NavItem icon={<Home className="h-4 w-4 shrink-0" />} label="Home" active />
+                    <NavItem icon={<Cloud className="h-4 w-4 shrink-0" />} label="My Drive" />
+                    <NavItem icon={<Clock className="h-4 w-4 shrink-0" />} label="Recent" />
+                    <NavItem icon={<Star className="h-4 w-4 shrink-0" />} label="Starred" />
+                    <NavItem icon={<Trash className="h-4 w-4 shrink-0" />} label="Trash" />
+                </nav>
 
-                <Separator className="my-4 dark:border-neutral-800" />
+                <Separator className="my-3 border-border" />
 
-                <div className="px-3">
-                    <p className="text-sm text-muted-foreground mb-2">Total Data Stored</p>
-
-                    <p className="text-lg font-semibold text-foreground">
-                        {totalGB ? `${totalGB} GB` : "-"}
+                <div className="px-2 py-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        Storage
                     </p>
-
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                        {totalGB != null ? `${totalGB} GB` : "—"}
+                    </p>
                 </div>
             </ScrollArea>
         </aside>
@@ -142,15 +140,16 @@ export function Sidebar({
 
 function NavItem({ icon, label, active }) {
     return (
-        <button className={`
-      w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm transition
-      ${active
-            ? "bg-primary/10 text-primary font-medium"
-            : "hover:bg-accent hover:text-accent-foreground"}
-      dark:hover:bg-neutral-800 dark:hover:text-white
-    `}>
+        <button
+            type="button"
+            className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                active
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            }`}
+        >
             {icon}
             <span>{label}</span>
         </button>
-    )
+    );
 }

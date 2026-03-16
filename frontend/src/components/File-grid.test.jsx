@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { describe, it, expect } from "vitest"
 import { FileGrid } from "./File-grid"
 
@@ -138,6 +138,52 @@ describe("FileGrid Component", () => {
         const { container } = render(<FileGrid files={mockFiles} />)
 
         const grid = container.querySelector(".grid")
-        expect(grid).toHaveClass("gap-4", "p-6")
+        expect(grid).toHaveClass("gap-3")
+        expect(grid).toHaveClass("sm:gap-4")
+    })
+
+    it("renders a download button in the top-right of each card", () => {
+        const { container } = render(<FileGrid files={mockFiles} />)
+
+        const firstCard = container.querySelector("a.group")
+        expect(firstCard).toBeInTheDocument()
+
+        const downloadButton = firstCard.querySelector("button")
+        expect(downloadButton).toBeInTheDocument()
+        expect(downloadButton).toHaveAttribute("title", "Download")
+        expect(downloadButton).toHaveAttribute(
+            "aria-label",
+            expect.stringContaining("Download")
+        )
+        expect(downloadButton.className).toContain("absolute")
+        expect(downloadButton.className).toContain("top-2")
+        expect(downloadButton.className).toContain("right-2")
+        expect(downloadButton.className).toContain("rounded-full")
+    })
+
+    it("applies hover animation classes to the download button", () => {
+        const { container } = render(<FileGrid files={mockFiles} />)
+
+        const firstCard = container.querySelector("a.group")
+        const downloadButton = firstCard.querySelector("button")
+
+        const className = downloadButton.className
+        expect(className).toContain("opacity-0")
+        expect(className).toContain("group-hover:opacity-100")
+        expect(className).toContain("scale-90")
+        expect(className).toContain("group-hover:scale-100")
+        expect(className).toContain("transition-all")
+    })
+
+    it("keeps download button triggering the same download link", () => {
+        const { container } = render(<FileGrid files={mockFiles} />)
+
+        const firstCard = container.querySelector("a.group")
+        const downloadButton = firstCard.querySelector("button")
+
+        // Button lives inside the same anchor, so clicking it should
+        // activate the same download link without errors.
+        expect(downloadButton.closest("a")).toBe(firstCard)
+        fireEvent.click(downloadButton)
     })
 })

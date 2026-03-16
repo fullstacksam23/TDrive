@@ -11,9 +11,7 @@ import {
     Plus
 } from "lucide-react"
 import api from "../lib/api.js"
-
-const apiUrl = import.meta.env.VITE_API_URL;
-const apiKey = import.meta.env.VITE_SECRET_KEY;
+import { supabase } from "@/lib/supabase";
 
 export function Sidebar({
                             onUploadStart,
@@ -41,10 +39,17 @@ export function Sidebar({
             onUploadComplete?.();
             return;
         }
-        // Listen for progress via SSE
-        const es = new EventSource(
-            `${apiUrl}/upload/status/${uploadId}?api_key=${apiKey}`
-        );
+        // Listen for progress via SSE. Pass access token via query param.
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const url = new URL(`${import.meta.env.VITE_API_URL}/upload/status/${uploadId}`);
+        if (token) {
+            url.searchParams.set("access_token", token);
+        }
+        const es = new EventSource(url.toString());
 
         es.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -73,7 +78,7 @@ export function Sidebar({
         fileInputRef.current?.click()
     }
     useEffect(() => {
-        async function getStats(){
+        async function getStats() {
             const res = await api.get("/files/stats");
             setTotalGB(res.data.totalGB);
         }

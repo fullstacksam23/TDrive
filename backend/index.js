@@ -1,13 +1,20 @@
 import express from "express";
 import Busboy from "busboy";
 import supabase from "./database/supabase.js";
-import {sendFile, getChunkStream} from "./bot.js";
+import {getChunkStream} from "./bot.js";
 import crypto from "crypto";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import {uploadQueue, setUploadProgress, getUploadProgress, deleteUploadProgress, connection} from "./redis.js";
+import {
+    uploadQueue,
+    initUploadProgress,
+    getUploadProgress,
+    deleteUploadProgress,
+    connection
+} from "./redis.js";
 import fs from "fs";
 import path from "path";
+import { authenticate } from "./middleware/auth.js";
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -27,20 +34,6 @@ app.use(cors({
 }));
 app.use(limiter);
 
-const API_KEY = process.env.SECRET_KEY;
-
-app.use((req, res, next) => {
-    const userKey = req.headers['x-api-key'] || req.query.api_key;
-
-    if (req.path === '/health') return next();
-
-    if (userKey === API_KEY) {
-        next();
-    } else {
-        res.status(401).send("Private: API Key Required");
-    }
-});
-
 const uploadLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20
@@ -49,7 +42,7 @@ connection.on("connect", () => {
     console.log("Redis connected");
 });
 
-app.post("/upload", uploadLimiter, async (req, res) => {
+app.post("/upload", authenticate, uploadLimiter, async (req, res) => {
 
     const busboy = Busboy({ headers: req.headers });
 
@@ -60,18 +53,16 @@ app.post("/upload", uploadLimiter, async (req, res) => {
     let originalName = "";
     let mimeType = "";
 
-    await setUploadProgress(uploadId, {
-        uploadedBytes: 0,
-        totalBytes: 1, // prevents NaN in progress bar
-        fileName: ""
+    req.on("aborted", async () => {
+        await deleteUploadProgress(uploadId);
     });
 
-    res.json({ uploadId });
-
-    busboy.on("file", (fieldname, file, info) => {
+    busboy.on("file", async (fieldname, file, info) => {
 
         originalName = info.filename;
         mimeType = info.mimeType;
+
+        await initUploadProgress(uploadId, 0, originalName);
 
         const writeStream = fs.createWriteStream(uploadPath);
 
@@ -83,12 +74,18 @@ app.post("/upload", uploadLimiter, async (req, res) => {
 
         writeStream.on("finish", async () => {
 
+            // update totalBytes in Redis
+            await connection.hset(`upload:${uploadId}`, {
+                totalBytes: totalSize
+            });
+
             await uploadQueue.add("processUpload", {
                 uploadId,
                 filePath: uploadPath,
                 fileName: originalName,
                 mimeType,
-                totalSize
+                totalSize,
+                userId: req.user.id
             });
 
         });
@@ -96,7 +93,7 @@ app.post("/upload", uploadLimiter, async (req, res) => {
     });
 
     req.pipe(busboy);
-
+    res.json({ uploadId });
 });
 
 app.get("/upload/status/:uploadId", (req, res) => {
@@ -106,13 +103,14 @@ app.get("/upload/status/:uploadId", (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no"); // prevents proxy buffering
+    res.flushHeaders();
 
     const interval = setInterval(async () => {
         try {
             const data = await getUploadProgress(uploadId);
             if (!data) return;
 
-            const percent = data.totalBytes
+            const percent = data.totalBytes > 0
                 ? Math.round((data.uploadedBytes / data.totalBytes) * 100)
                 : 0;
 
@@ -138,11 +136,14 @@ app.get("/upload/status/:uploadId", (req, res) => {
 });
 
 
-app.get("/files", async (req, res) => {
+app.get("/files", authenticate, async (req, res) => {
     try {
+        const userId = req.user.id;
+
         const {data, error} = await supabase
             .from("files")
             .select("*")
+            .eq("user_id", userId)
             .order("uploaded_at", { ascending: false });
 
 
@@ -158,14 +159,17 @@ app.get("/files", async (req, res) => {
     }
 });
 
-app.get("/files/stats", async (req, res) => {
+app.get("/files/stats", authenticate, async (req, res) => {
     const bytesToGB = (bytes) =>
         bytes ? (bytes / (1024 ** 3)).toFixed(2) : "0.00";
 
     try {
+        const userId = req.user.id;
+
         const { data, error } = await supabase
             .from("files")
-            .select("total_size");
+            .select("total_size")
+            .eq("user_id", userId);
 
         if (error) {
             console.error("Supabase error:", error);
@@ -185,7 +189,7 @@ app.get("/files/stats", async (req, res) => {
 
 });
 
-app.get("/download/:fileId", async (req, res) => {
+app.get("/download/:fileId", authenticate, async (req, res) => {
     let clientDisconnected = false;
 
     res.on("aborted", () => {
@@ -194,6 +198,18 @@ app.get("/download/:fileId", async (req, res) => {
     });
     try {
         const {fileId} = req.params;
+
+        const { data: fileInfo, error: err2 } = await supabase
+            .from("files")
+            .select("id, file_name, mimetype")
+            .eq("id", fileId)
+            .eq("user_id", req.user.id)
+            .single();
+        if(err2){
+            console.error("Error fetching file info: ", err2);
+            return res.status(500).send("Failed to fetch file info");
+        }
+        if (!fileInfo) return res.status(404).send("File not found");
 
         const {data:  telegramFileIds, error} = await supabase
             .from("file_chunks")
@@ -207,47 +223,45 @@ app.get("/download/:fileId", async (req, res) => {
 
         if (telegramFileIds.length === 0) return res.status(404).send("No telegram file found.");
 
-        const {data: fileInfo, error: err2} = await supabase
-            .from("files")
-            .select("file_name, mimetype")
-            .eq("id", fileId)
-            .single();
 
-        if(err2){
-            console.error("Error fetching file info: ", err2);
-            return res.status(500).send("Failed to fetch file info");
-        }
         console.log(fileInfo);
-        if (!fileInfo) return res.status(404).send("File not found");
 
         //set headers to tell browser to download the file and not display it
         const safeName = encodeURIComponent(fileInfo.file_name);
-        res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${safeName}`);
         res.setHeader('Content-Type', fileInfo.mimetype || 'application/octet-stream');
+        res.flushHeaders();
 
-        const CONCURRENCY = 4;
+// prefetch first chunk
+        let nextStreamPromise = getChunkStream(
+            telegramFileIds[0].telegram_file_id
+        );
 
-        for (let i = 0; i < telegramFileIds.length; i += CONCURRENCY) {
+        for (let i = 0; i < telegramFileIds.length; i++) {
+            // wait for prefetched chunk
+            const stream = await nextStreamPromise;
 
-            const batch = telegramFileIds.slice(i, i + CONCURRENCY);
-
-            const streams = await Promise.all(
-                batch.map(item => getChunkStream(item.telegram_file_id))
-            );
-
-            for (const stream of streams) {
-                if (clientDisconnected) {
-                    stream.destroy();
-                    break;
-                }
-                await new Promise((resolve, reject) => {
-                    stream.pipe(res, { end: false });
-                    stream.on("end", resolve);
-                    stream.on("error", reject);
-
-                });
+            if (clientDisconnected) {
+                stream.destroy();
+                break;
             }
+            // prefetch next chunk while streaming this one
+            if (i + 1 < telegramFileIds.length) {
+                nextStreamPromise = getChunkStream(
+                    telegramFileIds[i + 1].telegram_file_id
+                );
+            }
+
+            await new Promise((resolve, reject) => {
+
+                stream.pipe(res, { end: false });
+
+                stream.once("end", resolve);
+                stream.once("error", reject);
+
+            });
         }
+
         res.end();
     }catch(error){
         console.error("Download Stream Error:", error);
@@ -256,7 +270,7 @@ app.get("/download/:fileId", async (req, res) => {
     }
 })
 
-app.get("/search", async (req, res) => {
+app.get("/search", authenticate, async (req, res) => {
     const query = req.query.q;
     let data, error;
     if (!query || !query.trim()) {
@@ -269,6 +283,7 @@ app.get("/search", async (req, res) => {
             ({ data, error } = await supabase
                 .from("files")
                 .select("*")
+                .eq("user_id", req.user.id)
                 .textSearch("search_vector", query, {
                     type: "websearch",
                     config: "english"
@@ -278,6 +293,7 @@ app.get("/search", async (req, res) => {
             ({ data, error } = await supabase
                 .from("files")
                 .select("*")
+                .eq("user_id", req.user.id)
                 .ilike("file_name", `%${query}%`));
         }
 

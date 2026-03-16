@@ -4,9 +4,7 @@ import { FileGrid } from "@/components/File-grid";
 import { useEffect, useState } from "react";
 import Upload from "@/components/Upload";
 import FileList from "@/components/File-list";
-
-const apiUrl = import.meta.env.VITE_API_URL;
-const apiKey = import.meta.env.VITE_SECRET_KEY;
+import { supabase } from "@/lib/supabase";
 
 const VIEW_STORAGE_KEY = "tdrive-view";
 
@@ -33,14 +31,21 @@ function App() {
     }, [view]);
     useEffect(() => {
         async function loadFiles() {
-            const url = searchQuery ? `${apiUrl}/search/?q=${encodeURIComponent(searchQuery)}` : `${apiUrl}/files`;
-            const files = await fetch(url, {
-                headers: {
-                    'x-api-key': apiKey
-                }
-                });
-            const data = await files.json();
-            setFiles(data);
+            const { data } = await supabase.auth.getSession();
+            const token = data.session?.access_token;
+            const apiUrl = import.meta.env.VITE_API_URL;
+            const url = searchQuery
+                ? `${apiUrl}/search/?q=${encodeURIComponent(searchQuery)}`
+                : `${apiUrl}/files`;
+            const filesRes = await fetch(url, {
+                headers: token
+                    ? {
+                        Authorization: `Bearer ${token}`,
+                    }
+                    : {},
+            });
+            const json = await filesRes.json();
+            setFiles(json);
         }
         loadFiles();
     }, [refreshKey, searchQuery]);

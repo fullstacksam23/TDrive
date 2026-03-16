@@ -1,78 +1,82 @@
 import fs from "fs";
 import { Worker } from "bullmq";
-import { connection, setUploadProgress } from "./redis.js";
+import { connection, incrementUploadProgress, finishUpload } from "./redis.js";
 import { sendFile } from "./bot.js";
 import supabase from "./database/supabase.js";
 
 const CHUNK_SIZE = 17 * 1024 * 1024;
+const MAX_PARALLEL = 3;
 
 const worker = new Worker("uploadQueue", async job => {
 
-    if (job.name === "processUpload") {
+    if (job.name !== "processUpload") return;
 
-        const { uploadId, filePath, fileName, mimeType, totalSize } = job.data;
+    const { uploadId, filePath, fileName, mimeType, totalSize, userId } = job.data;
 
-        const stream = fs.createReadStream(filePath, {
-            highWaterMark: CHUNK_SIZE
-        });
+    const stream = fs.createReadStream(filePath, {
+        highWaterMark: CHUNK_SIZE
+    });
 
-        let partNumber = 0;
-        let uploadedBytes = 0;
+    let partNumber = 0;
+    const queue = [];
 
-        // create file row first
-        const { data: fileRow } = await supabase
-            .from("files")
-            .insert({
-                file_name: fileName,
-                mimetype: mimeType,
-                total_size: totalSize
-            })
-            .select()
-            .single();
+    // create file row
+    const { data: fileRow } = await supabase
+        .from("files")
+        .insert({
+            user_id: userId,
+            file_name: fileName,
+            mimetype: mimeType,
+            total_size: totalSize
+        })
+        .select()
+        .single();
 
-        for await (const chunk of stream) {
+    for await (const chunk of stream) {
 
-            partNumber++;
+        partNumber++;
+        const currentPart = partNumber;
 
-            uploadedBytes += chunk.length;
+        const uploadTask = async () => {
 
             const telegramFileId = await sendFile(
                 chunk,
-                `${fileName}.part${partNumber}`
+                `${fileName}.part${currentPart}`
             );
 
-            // insert chunk immediately
             await supabase.from("file_chunks").insert({
                 file_id: fileRow.id,
-                chunk_index: partNumber,
+                chunk_index: currentPart,
                 telegram_file_id: telegramFileId
             });
 
-            await setUploadProgress(uploadId, {
-                uploadedBytes: Math.min(uploadedBytes, totalSize),
-                totalBytes: totalSize,
-                fileName: fileName
-            });
+            await incrementUploadProgress(uploadId, chunk.length);
+        };
 
+        queue.push(uploadTask());
+
+        // run batch when limit reached
+        if (queue.length >= MAX_PARALLEL) {
+            await Promise.allSettled(queue);
+            queue.length = 0;
         }
-
-        await setUploadProgress(uploadId, {
-            uploadedBytes: totalSize,
-            totalBytes: totalSize,
-            done: true,
-            fileName: fileName
-        });
-
-        fs.unlinkSync(filePath);
-
-        console.log("Upload completed:", fileName);
-
     }
 
-}, { connection, concurrency: 3 });
+    // wait remaining uploads
+    if (queue.length > 0) {
+        await Promise.allSettled(queue);
+    }
+
+    await finishUpload(uploadId);
+
+    fs.unlinkSync(filePath);
+
+    console.log("Upload completed:", fileName);
+
+}, { connection, concurrency: 2 });
 
 worker.on("failed", (job, err) => {
-    console.error("Job failed:", job.id);
+    console.error("Job failed:", job?.id);
     console.error(err);
 });
 

@@ -14,38 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-    File,
-    FileVideo,
-    FileAudio,
-    FileImage,
-    FileArchive,
-    FileText,
-    FileCode,
-    FileSpreadsheet,
-    Presentation,
-    FileJson,
+import {downloadFile, getIconForMimeType} from "@/lib/utils.js";
 
-} from "lucide-react";
-const apiUrl = import.meta.env.VITE_API_URL;
-const apiKey = import.meta.env.VITE_SECRET_KEY;
-
-function getIconForMimeType(mime) {
-    if (!mime) return File;
-
-    if (mime.startsWith("video/")) return {icon: FileVideo, color: "text-red-500 dark:text-red-400"};
-    if (mime.startsWith("audio/")) return {icon: FileAudio, color: "text-blue-500 dark:text-blue-400"};
-    if (mime.startsWith("image/")) return {icon: FileImage, color: "text-purple-500 dark:text-purple-400"};
-    if (mime === "application/zip" || mime.includes("compressed")) return {icon: FileArchive, color: "text-amber-500 dark:text-amber-400"};
-    if (mime === "application/pdf") return {icon: FileText, color: "text-neutral-500 dark:text-neutral-300"};
-    if (mime.includes("presentation")) return {icon: Presentation, color: "text-orange-500 dark:text-orange-400"};
-    if (mime.includes("spreadsheet") || mime.includes("excel") || mime.includes("csv")) return {icon: FileSpreadsheet, color: "text-emerald-500 dark:text-emerald-400"};
-    if (mime.includes("json")) return {icon: FileJson, color: "text-violet-500 dark:text-violet-400"};
-    if (mime.includes("text") || mime.includes("markdown")) return {icon: FileText, color: "text-blue-500 dark:text-blue-300"};
-    if (mime.includes("code") || mime.includes("javascript")) return {icon: FileCode, color: "text-indigo-500 dark:text-indigo-400"};
-
-    return { icon: File, color: "text-neutral-500 dark:text-neutral-500" }; // fallback
-}
 function formatSize(bytes) {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
@@ -115,13 +85,10 @@ export default function FileList({ files }) {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-44">
-                                                <DropdownMenuItem asChild>
-                                                    <a
-                                                        href={`${apiUrl}/download/${file.id}?api_key=${apiKey}`}
-                                                        download={file.file_name}
-                                                    >
-                                                        Download
-                                                    </a>
+                                                <DropdownMenuItem
+                                                    onClick={() => downloadFile(file.id, file.file_name)}
+                                                >
+                                                    Download
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem>Rename</DropdownMenuItem>
                                                 <DropdownMenuItem className="text-destructive focus:text-destructive">

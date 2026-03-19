@@ -90,6 +90,7 @@ app.post("/upload", authenticate, uploadLimiter, async (req, res) => {
                 totalSize,
                 userId: req.user.id
             });
+            console.log("Job added:", uploadId);
 
         });
 

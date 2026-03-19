@@ -4,6 +4,7 @@ import { connection, incrementUploadProgress, finishUpload } from "./redis.js";
 import sendFile from "./bot.js";
 import supabase from "./database/supabase.js";
 
+console.log("Worker file loaded");
 const CHUNK_SIZE = 17 * 1024 * 1024;
 const MAX_PARALLEL = 2; // REDUCE CONCURRENT PROCESSING FOR RENDER
 
@@ -12,7 +13,7 @@ const worker = new Worker("uploadQueue", async job => {
     if (job.name !== "processUpload") return;
 
     const { uploadId, filePath, fileName, mimeType, totalSize, userId } = job.data;
-
+    console.log("Worker started job:", uploadId);
     const stream = fs.createReadStream(filePath, {
         highWaterMark: CHUNK_SIZE
     });
@@ -53,18 +54,18 @@ const worker = new Worker("uploadQueue", async job => {
             await incrementUploadProgress(uploadId, chunk.length);
         };
 
-        queue.push(uploadTask());
+        queue.push(uploadTask);
 
         // run batch when limit reached
         if (queue.length >= MAX_PARALLEL) {
-            await Promise.allSettled(queue);
+            await Promise.allSettled(queue.map(fn => fn()));
             queue.length = 0;
         }
     }
 
     // wait remaining uploads
     if (queue.length > 0) {
-        await Promise.allSettled(queue);
+        await Promise.allSettled(queue.map(fn => fn()));
     }
 
     await finishUpload(uploadId);

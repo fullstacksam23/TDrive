@@ -1,5 +1,4 @@
 import { Bot, InputFile } from "grammy";
-import axios from "axios";
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,7 +13,7 @@ function sleep(ms) {
 }
 
 // upload with retry support
-async function sendFile(chunk, fileName, retries = 5) {
+export default async function sendFile(chunk, fileName, retries = 5) {
 
     for (let attempt = 1; attempt <= retries; attempt++) {
 
@@ -61,44 +60,3 @@ async function sendFile(chunk, fileName, retries = 5) {
         }
     }
 }
-
-
-
-async function getChunkStream(telegramFileId, retries = 3) {
-    try {
-        const file = await bot.api.getFile(telegramFileId);
-        const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
-
-        for (let attempt = 1; attempt <= retries; attempt++) {
-            try {
-                const response = await axios.get(url, {
-                    responseType: "stream",
-                    timeout: 30000, // VERY IMPORTANT
-                    maxContentLength: Infinity,
-                    maxBodyLength: Infinity,
-                    transitional: {
-                        clarifyTimeoutError: true
-                    }
-                });
-
-                return response.data;
-
-            } catch (err) {
-                console.error(`Download attempt ${attempt} failed`);
-
-                if (attempt === retries) {
-                    console.error("Final failure:", err.message);
-                    throw err;
-                }
-
-                await sleep(2000); // wait before retry
-            }
-        }
-
-    } catch (error) {
-        console.error("Failed to download chunk:", error);
-        throw error;
-    }
-}
-
-export {sendFile, getChunkStream};

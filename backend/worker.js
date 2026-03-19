@@ -1,7 +1,7 @@
 import fs from "fs";
 import { Worker } from "bullmq";
 import { connection, incrementUploadProgress, finishUpload } from "./redis.js";
-import { sendFile } from "./bot.js";
+import sendFile from "./bot.js";
 import supabase from "./database/supabase.js";
 
 const CHUNK_SIZE = 17 * 1024 * 1024;

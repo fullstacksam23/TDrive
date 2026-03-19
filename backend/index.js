@@ -17,7 +17,7 @@ import path from "path";
 import { authenticate } from "./middleware/auth.js";
 
 
-// import "./worker.js"; // run worker in the same process to deploy on render
+import "./worker.js"; // run worker in the same process to deploy on render
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes

@@ -1,7 +1,7 @@
 import express from "express";
 import Busboy from "busboy";
 import supabase from "./database/supabase.js";
-import {getChunkStream} from "./bot.js";
+import {bot} from "./bot.js";
 import crypto from "crypto";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -17,7 +17,7 @@ import path from "path";
 import { authenticate } from "./middleware/auth.js";
 
 
-import "./worker.js"; // run worker in the same process to deploy on render
+// import "./worker.js"; // run worker in the same process to deploy on render
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -193,85 +193,63 @@ app.get("/files/stats", authenticate, async (req, res) => {
 });
 
 app.get("/download/:fileId", authenticate, async (req, res) => {
-    let clientDisconnected = false;
-
-    res.on("aborted", () => {
-        clientDisconnected = true;
-        console.log("Client disconnected during download");
-    });
     try {
-        const {fileId} = req.params;
+        const { fileId } = req.params;
 
-        const { data: fileInfo, error: err2 } = await supabase
+        // get file info and validate ownership
+        const { data: fileInfo, error: err1 } = await supabase
             .from("files")
-            .select("id, file_name, mimetype")
+            .select("id, file_name, total_size")
             .eq("id", fileId)
             .eq("user_id", req.user.id)
             .single();
-        if(err2){
-            console.error("Error fetching file info: ", err2);
-            return res.status(500).send("Failed to fetch file info");
-        }
-        if (!fileInfo) return res.status(404).send("File not found");
 
-        const {data:  telegramFileIds, error} = await supabase
+        if (err1) {
+            console.error("File fetch error:", err1);
+            return res.status(500).json({ error: "Failed to fetch file" });
+        }
+
+        if (!fileInfo) {
+            return res.status(404).json({ error: "File not found" });
+        }
+        console.log(fileInfo);
+        // get chunk ids
+        const { data: chunks, error: err2 } = await supabase
             .from("file_chunks")
             .select("telegram_file_id")
             .eq("file_id", fileId)
             .order("chunk_index", { ascending: true });
-        if(error){
-            console.log("Error fetching chunks"+error);
-            return res.status(500).send("Failed to fetch file chunks");
+
+        if (err2) {
+            console.error("Chunk fetch error:", err2);
+            return res.status(500).json({ error: "Failed to fetch chunks" });
         }
 
-        if (telegramFileIds.length === 0) return res.status(404).send("No telegram file found.");
-
-
-        console.log(fileInfo);
-
-        //set headers to tell browser to download the file and not display it
-        const safeName = encodeURIComponent(fileInfo.file_name);
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${safeName}`);
-        res.setHeader('Content-Type', fileInfo.mimetype || 'application/octet-stream');
-        res.flushHeaders();
-
-// prefetch first chunk
-        let nextStreamPromise = getChunkStream(
-            telegramFileIds[0].telegram_file_id
-        );
-
-        for (let i = 0; i < telegramFileIds.length; i++) {
-            // wait for prefetched chunk
-            const stream = await nextStreamPromise;
-
-            if (clientDisconnected) {
-                stream.destroy();
-                break;
-            }
-            // prefetch next chunk while streaming this one
-            if (i + 1 < telegramFileIds.length) {
-                nextStreamPromise = getChunkStream(
-                    telegramFileIds[i + 1].telegram_file_id
-                );
-            }
-
-            await new Promise((resolve, reject) => {
-
-                stream.pipe(res, { end: false });
-
-                stream.once("end", resolve);
-                stream.once("error", reject);
-
-            });
+        if (!chunks || chunks.length === 0) {
+            return res.status(404).json({ error: "No chunks found" });
         }
+        const urls = [];
 
-        res.end();
-    }catch(error){
-        console.error("Download Stream Error:", error);
-        if (!res.headersSent) res.status(500).send("Error downloading file");
-        else res.end();
+        for (const chunk of chunks) {
+            const file = await bot.api.getFile(chunk.telegram_file_id);
+            console.log(file);
+            urls.push(
+                `${process.env.CLOUDFLARE_URL}?path=${encodeURIComponent(file.file_path)}`
+            );
+        }
+        console.log(urls);
+
+        res.json({
+            fileName: fileInfo.file_name,
+            urls,
+            totalSize: fileInfo.total_size
+        });
+
+    } catch (err) {
+        console.error("Download endpoint error:", err);
+        res.status(500).json({ error: "Download failed" });
     }
-})
+});
 
 app.get("/search", authenticate, async (req, res) => {
     const query = req.query.q;

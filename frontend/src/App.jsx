@@ -20,6 +20,7 @@ function App() {
     const [refreshKey, setRefreshKey] = useState(0);
     const [searchQuery, setSearchQuery] = useState("");
     const [upload, setUpload] = useState(null);
+    const [download, setDownload] = useState(null); // ✅ NEW
     const [files, setFiles] = useState([]);
 
     const [view, setView] = useState(getStoredView);
@@ -29,14 +30,17 @@ function App() {
             localStorage.setItem(VIEW_STORAGE_KEY, view);
         } catch (_) {}
     }, [view]);
+
     useEffect(() => {
         async function loadFiles() {
             const { data } = await supabase.auth.getSession();
             const token = data.session?.access_token;
             const apiUrl = import.meta.env.VITE_API_URL;
+
             const url = searchQuery
                 ? `${apiUrl}/search/?q=${encodeURIComponent(searchQuery)}`
                 : `${apiUrl}/files`;
+
             const filesRes = await fetch(url, {
                 headers: token
                     ? {
@@ -44,24 +48,29 @@ function App() {
                     }
                     : {},
             });
+
             const json = await filesRes.json();
             setFiles(json);
         }
+
         loadFiles();
     }, [refreshKey, searchQuery]);
 
     function refreshFiles() {
-        setRefreshKey(prev => prev + 1);
+        setRefreshKey((prev) => prev + 1);
     }
 
     return (
         <div className="flex min-h-screen w-full bg-background text-foreground">
+            {/* Sidebar */}
             <Sidebar
                 onUploadStart={(fileName) =>
                     setUpload({ fileName, progress: 0 })
                 }
                 onUploadProgress={(progress) =>
-                    setUpload(prev => prev ? { ...prev, progress } : prev)
+                    setUpload((prev) =>
+                        prev ? { ...prev, progress } : prev
+                    )
                 }
                 onUploadComplete={() =>
                     setTimeout(() => setUpload(null), 1000)
@@ -69,21 +78,41 @@ function App() {
                 onUploadSuccess={refreshFiles}
             />
 
+            {/* Main content */}
             <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-auto">
-                <Header setSearchQuery={setSearchQuery} view={view} setView={setView} />
-                {view === "list" ? <FileList files={files} /> : <FileGrid files={files} />}
+                <Header
+                    setSearchQuery={setSearchQuery}
+                    view={view}
+                    setView={setView}
+                />
+
+                {view === "list" ? (
+                    <FileList files={files} onDownload={setDownload} />
+                ) : (
+                    <FileGrid files={files} onDownload={setDownload} />
+                )}
             </div>
 
-            <div className="fixed bottom-6 right-6 z-50">
+            {/* Upload + Download UI */}
+            <div className="fixed bottom-6 right-6 z-50 space-y-3">
+                {/* Upload */}
                 {upload && (
                     <Upload
                         fileName={upload.fileName}
-                        value={upload.progress}
+                        progress={{ percent: upload.progress }}
+                    />
+                )}
+
+                {/* Download */}
+                {download && (
+                    <Upload
+                        fileName={download.fileName}
+                        progress={download.progress}
                     />
                 )}
             </div>
         </div>
-    )
+    );
 }
 
-export default App
+export default App;

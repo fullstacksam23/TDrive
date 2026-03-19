@@ -14,17 +14,81 @@ import {
     FileJson,
 
 } from "lucide-react";
+
 const apiUrl = import.meta.env.VITE_API_URL;
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-export async function downloadFile(fileId) {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
+export async function downloadFile(fileId, fileName, onProgress) {
+    let writable;
 
-    window.open(`${apiUrl}/download/${fileId}?token=${token}`);
+    try {
+        const handle = await window.showSaveFilePicker({
+            suggestedName: fileName
+        });
+        writable = await handle.createWritable();
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const res = await fetch(`${apiUrl}/download/${fileId}?token=${token}`);
+        if (!res.ok) throw new Error("Failed to fetch chunk list");
+
+        const { urls, totalSize } = await res.json();
+        console.log(urls, totalSize);
+
+        let downloaded = 0;
+        let lastPercent = 0;
+        let startTime = Date.now();
+
+        for (let i = 0; i < urls.length; i++) {
+            const response = await fetch(urls[i]);
+
+            if (!response.ok || !response.body) {
+                throw new Error(`Chunk ${i} failed`);
+            }
+
+            const reader = response.body.getReader();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                await writable.write(value);
+
+                downloaded += value.length;
+
+                if (onProgress && totalSize > 0) {
+                    const percent = Math.floor((downloaded / totalSize) * 100);
+
+                    if (percent !== lastPercent) {
+                        lastPercent = percent;
+
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        const speed = downloaded / elapsed;
+
+                        onProgress({ percent, speed });
+                    }
+                }
+            }
+        }
+
+        await writable.close();
+        if (onProgress) onProgress({ percent: 100, speed: 0 });
+
+        console.log("Download complete!");
+
+    } catch (err) {
+        if (err.name === "AbortError") return;
+
+        if (writable) {
+            try { await writable.abort(); } catch {}
+        }
+
+        console.error("Download failed:", err);
+    }
 }
 
 export function getIconForMimeType(mime) {

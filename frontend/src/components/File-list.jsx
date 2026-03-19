@@ -5,22 +5,24 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
+
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { MoreVertical } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {downloadFile, getIconForMimeType} from "@/lib/utils.js";
+} from "@/components/ui/dropdown-menu";
+
+import { MoreVertical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { downloadFile, getIconForMimeType } from "@/lib/utils.js";
 
 function formatSize(bytes) {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
-    if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-    return `${(bytes / 1024 ** 3).toFixed(2)} GB`
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 }
 
 function formatDate(isoString) {
@@ -31,14 +33,18 @@ function formatDate(isoString) {
     });
 }
 
-export default function FileList({ files }) {
+export default function FileList({ files, onDownload }) {
     if (!files.length) {
         return (
             <div className="mx-4 my-6 flex-1 min-h-0 sm:mx-6">
                 <div className="flex h-full min-h-70 items-center justify-center rounded-xl border border-dashed border-border/80 bg-card/70 p-8 text-center shadow-sm">
                     <div>
-                        <p className="text-base font-semibold text-foreground">No files yet</p>
-                        <p className="mt-1 text-sm text-muted-foreground">Upload your first file using the New button in the sidebar.</p>
+                        <p className="text-base font-semibold text-foreground">
+                            No files yet
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Upload your first file using the New button in the sidebar.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -63,9 +69,11 @@ export default function FileList({ files }) {
                             <TableHead className="w-12 p-0" aria-hidden />
                         </TableRow>
                     </TableHeader>
+
                     <TableBody>
                         {files.map((file) => {
                             const iconData = getIconForMimeType(file.mimetype);
+
                             return (
                                 <TableRow
                                     key={file.id}
@@ -73,18 +81,23 @@ export default function FileList({ files }) {
                                 >
                                     <TableCell className="py-3">
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <iconData.icon className={`h-5 w-5 shrink-0 ${iconData.color}`} />
+                                            <iconData.icon
+                                                className={`h-5 w-5 shrink-0 ${iconData.color}`}
+                                            />
                                             <span className="truncate text-sm font-medium text-foreground">
                                                 {file.file_name}
                                             </span>
                                         </div>
                                     </TableCell>
+
                                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap py-3">
                                         {formatDate(file.uploaded_at)}
                                     </TableCell>
+
                                     <TableCell className="text-right text-sm text-muted-foreground whitespace-nowrap py-3">
                                         {formatSize(file.total_size)}
                                     </TableCell>
+
                                     <TableCell className="py-2 pr-2 text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
@@ -97,13 +110,54 @@ export default function FileList({ files }) {
                                                     <MoreVertical className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
+
                                             <DropdownMenuContent align="end" className="w-44">
                                                 <DropdownMenuItem
-                                                    onClick={() => downloadFile(file.id, file.file_name)}
+                                                    onClick={async () => {
+                                                        try {
+                                                            // 🔥 Start download UI
+                                                            onDownload?.({
+                                                                fileName: file.file_name,
+                                                                progress: { percent: 0 },
+                                                            });
+
+                                                            // 🔥 Download with progress
+                                                            await downloadFile(
+                                                                file.id,
+                                                                file.file_name,
+                                                                (progress) => {
+                                                                    onDownload?.({
+                                                                        fileName: file.file_name,
+                                                                        progress,
+                                                                    });
+                                                                }
+                                                            );
+
+                                                            // ✅ Mark complete
+                                                            onDownload?.({
+                                                                fileName: file.file_name,
+                                                                progress: { percent: 100 },
+                                                            });
+
+                                                            // ✨ Remove after delay
+                                                            setTimeout(() => {
+                                                                onDownload?.(null);
+                                                            }, 1500);
+
+                                                        } catch (err) {
+                                                            console.error(err);
+                                                            alert("Download failed");
+                                                            onDownload?.(null);
+                                                        }
+                                                    }}
                                                 >
                                                     Download
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem>Rename</DropdownMenuItem>
+
+                                                <DropdownMenuItem>
+                                                    Rename
+                                                </DropdownMenuItem>
+
                                                 <DropdownMenuItem className="text-destructive focus:text-destructive">
                                                     Delete
                                                 </DropdownMenuItem>

@@ -2,19 +2,31 @@ import { Progress } from "@/components/ui/progress";
 import { File, CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export default function Upload({ fileName, value }) {
+export default function Upload({ fileName, progress }) {
     const [done, setDone] = useState(false);
 
+    // Support both old (number) and new ({ percent, speed }) formats
+    const percent =
+        typeof progress === "number"
+            ? progress
+            : progress?.percent ?? 0;
+
+    const speed =
+        typeof progress === "object" && progress?.speed
+            ? progress.speed
+            : null;
+
     useEffect(() => {
-        if (value >= 100) {
+        if (percent >= 100) {
             setDone(true);
+        } else {
+            setDone(false);
         }
-    }, [value]);
+    }, [percent]);
 
     return (
         <div
             className="
-            fixed bottom-6 right-6 z-50
             w-80
             rounded-xl
             border border-border
@@ -24,10 +36,8 @@ export default function Upload({ fileName, value }) {
             animate-in fade-in slide-in-from-bottom-4
         "
         >
-
             {/* Header */}
             <div className="flex items-center gap-3 mb-3">
-
                 {!done ? (
                     <File className="h-5 w-5 text-muted-foreground" />
                 ) : (
@@ -39,19 +49,23 @@ export default function Upload({ fileName, value }) {
                 </p>
 
                 <span className="text-xs text-muted-foreground">
-                    {done ? "Done" : `${value}%`}
+                    {done
+                        ? "Done"
+                        : `${percent}%${
+                            speed
+                                ? ` • ${(speed / 1024 / 1024).toFixed(1)} MB/s`
+                                : ""
+                        }`}
                 </span>
-
             </div>
 
             {/* Progress bar */}
             {!done && (
                 <Progress
-                    value={value}
+                    value={percent}
                     className="w-full h-2 transition-all"
                 />
             )}
-
         </div>
     );
 }

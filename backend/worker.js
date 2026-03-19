@@ -5,7 +5,7 @@ import { sendFile } from "./bot.js";
 import supabase from "./database/supabase.js";
 
 const CHUNK_SIZE = 17 * 1024 * 1024;
-const MAX_PARALLEL = 3;
+const MAX_PARALLEL = 2; // REDUCE CONCURRENT PROCESSING FOR RENDER
 
 const worker = new Worker("uploadQueue", async job => {
 
@@ -73,7 +73,7 @@ const worker = new Worker("uploadQueue", async job => {
 
     console.log("Upload completed:", fileName);
 
-}, { connection, concurrency: 2 });
+}, { connection, concurrency: 1 }); // REDUCE CONCURRENT PROCESSING FOR RENDER
 
 worker.on("failed", (job, err) => {
     console.error("Job failed:", job?.id);
